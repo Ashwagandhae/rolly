@@ -12,6 +12,7 @@ pub enum Direction {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Polly {
     pub body_handle: RigidBodyHandle,
+    pub collider_handle: ColliderHandle,
     pub feet_sensor_handle: ColliderHandle,
     pub feet_grounded: bool,
     pub feet_frame: ContinuousFrame,
@@ -25,7 +26,7 @@ impl Polly {
         linvel: Vec2,
         angvel: f32,
     ) -> Self {
-        let (body_handle, _) = physics_world.add_body(
+        let (body_handle, collider_handle) = physics_world.add_body(
             RigidBodyBuilder::dynamic()
                 .translation(translation.into())
                 .rotation(rotation)
@@ -33,6 +34,7 @@ impl Polly {
                 .angvel(angvel)
                 .linear_damping(PLAYER_LINEAR_DAMPING)
                 .angular_damping(PLAYER_ANGULAR_DAMPING)
+                .ccd_enabled(true)
                 .build(),
             ColliderBuilder::capsule_x(0.05, 0.05)
                 .friction(PLAYER_FRICTION)
@@ -54,6 +56,7 @@ impl Polly {
         let feet_frame = ContinuousFrame::new(0.0);
 
         Self {
+            collider_handle,
             body_handle,
             feet_sensor_handle,
             feet_grounded,
@@ -67,6 +70,7 @@ impl Polly {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Rolly {
     pub body_handle: RigidBodyHandle,
+    pub collider_handle: ColliderHandle,
 }
 
 impl Rolly {
@@ -77,7 +81,7 @@ impl Rolly {
         linvel: Vec2,
         angvel: f32,
     ) -> Self {
-        let (body_handle, _) = physics_world.add_body(
+        let (body_handle, collider_handle) = physics_world.add_body(
             RigidBodyBuilder::dynamic()
                 .translation(translation.into())
                 .rotation(rotation)
@@ -85,13 +89,17 @@ impl Rolly {
                 .angvel(angvel)
                 .linear_damping(PLAYER_ROLLY_LINEAR_DAMPING)
                 .angular_damping(PLAYER_ROLLY_ANGULAR_DAMPING)
+                .ccd_enabled(true)
                 .build(),
             ColliderBuilder::ball(0.075)
                 .friction(PLAYER_FRICTION)
                 .friction_combine_rule(CoefficientCombineRule::Max)
                 .build(),
         );
-        Rolly { body_handle }
+        Rolly {
+            body_handle,
+            collider_handle,
+        }
     }
     pub fn despawn(&self, physics_world: &mut PhysicsWorld) {
         physics_world.remove_body(self.body_handle);
@@ -108,6 +116,12 @@ impl Body {
         match self {
             Body::Polly(polly) => polly.body_handle,
             Body::Rolly(rolly) => rolly.body_handle,
+        }
+    }
+    pub fn any_collider_handle(&self) -> ColliderHandle {
+        match self {
+            Body::Polly(polly) => polly.collider_handle,
+            Body::Rolly(rolly) => rolly.collider_handle,
         }
     }
     pub fn unwrap_polly(&self) -> &Polly {
@@ -187,9 +201,35 @@ impl Transition {
     }
 }
 
+pub struct Tween {
+    pub target: f32,
+    pub value: f32,
+    pub half_life: f32,
+}
+
+impl Tween {
+    pub fn new(value: f32, half_life: f32) -> Self {
+        Self {
+            target: value,
+            value,
+            half_life,
+        }
+    }
+    pub fn tick(&mut self, delta_time: f32) {
+        self.value += (self.target - self.value) * (delta_time / self.half_life) * 0.5;
+    }
+    pub fn set(&mut self, value: f32) {
+        self.target = value;
+    }
+    pub fn get(&self) -> f32 {
+        self.value
+    }
+}
+
 pub struct Player {
     pub direction: Direction,
     pub rolly_polly_transition: Transition,
+    pub eye_x: Tween,
     pub body: Body,
 }
 impl Player {
@@ -206,10 +246,13 @@ impl Player {
 
         let rolly_polly_transition = Transition::End;
 
+        let eye_x = Tween::new(1.0, 0.05);
+
         Self {
             direction,
             body,
             rolly_polly_transition,
+            eye_x,
         }
     }
 }

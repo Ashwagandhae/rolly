@@ -6,11 +6,17 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-futures = "0.3.30"
+hecs = { version = "0.10.4", features = ["hecs-macros", "macros"] }
+indexmap = "2.1.0"
+itertools = "0.12.0"
 macroquad = "0.4.4"
 nalgebra = { version = "0.32", features = ["convert-glam021"] }
+ordered-float = "4.2.0"
 poly2tri-rs = "0.1.2"
 rapier2d = "0.17.2"
+simple-easing = "1.0.1"
+svg2polylines = "0.8.1"
+xml = "0.8.10"
 
 [build-dependencies]
 imagesize = "0.12.0"

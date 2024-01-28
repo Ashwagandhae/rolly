@@ -1,3 +1,4 @@
+use macroquad::time::get_frame_time;
 use rapier2d::prelude::*;
 
 pub struct PhysicsWorld {
@@ -51,6 +52,7 @@ impl PhysicsWorld {
     }
 
     pub fn update(&mut self) {
+        self.integration_parameters.dt = get_frame_time();
         self.physics_pipeline.step(
             &self.gravity,
             &self.integration_parameters,
@@ -97,6 +99,27 @@ impl PhysicsWorld {
 
     pub fn get_body_mut(&mut self, handle: RigidBodyHandle) -> Option<&mut RigidBody> {
         self.rigid_body_set.get_mut(handle)
+    }
+
+    pub fn add_collider(&mut self, collider: Collider) -> ColliderHandle {
+        self.collider_set.insert(collider)
+    }
+
+    pub fn remove_collider(&mut self, handle: ColliderHandle) {
+        self.collider_set.remove(
+            handle,
+            &mut self.island_manager,
+            &mut self.rigid_body_set,
+            true,
+        );
+    }
+
+    pub fn get_collider(&self, handle: ColliderHandle) -> Option<&Collider> {
+        self.collider_set.get(handle)
+    }
+
+    pub fn get_collider_mut(&mut self, handle: ColliderHandle) -> Option<&mut Collider> {
+        self.collider_set.get_mut(handle)
     }
 }
 

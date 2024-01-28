@@ -1,9 +1,10 @@
 use macroquad::prelude::*;
 
-mod consts;
-mod draw;
-mod update;
-mod world;
+pub mod consts;
+pub mod draw;
+pub mod polygon;
+pub mod update;
+pub mod world;
 
 use draw::draw;
 use update::update;
@@ -23,6 +24,7 @@ fn window_conf() -> Conf {
 async fn main() {
     let mut world = World::new().await;
     loop {
+        clear_background(RED);
         update(&mut world);
         draw(&world);
 

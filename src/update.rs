@@ -1,3 +1,4 @@
+use crate::world::floor::Material;
 use crate::world::player::{Body, Polly, Rolly};
 
 use super::consts::*;
@@ -13,6 +14,7 @@ pub fn update(world: &mut World) {
     world.physics_world.update();
 
     player_body(world);
+    player_water(world);
     player_transition(world);
     match world.player.body {
         Body::Rolly(_) => {}
@@ -49,11 +51,16 @@ fn update_zoom(world: &mut World) {
 
 use super::world::player::Direction;
 fn player_direction(world: &mut World) {
-    if is_key_pressed(KeyCode::Right) {
-        world.player.direction = Direction::Right;
-    }
-    if is_key_pressed(KeyCode::Left) {
-        world.player.direction = Direction::Left;
+    match (is_key_down(KeyCode::Right), is_key_down(KeyCode::Left)) {
+        (true, false) => {
+            world.player.eye_x.set(1.0);
+            world.player.direction = Direction::Right;
+        }
+        (false, true) => {
+            world.player.eye_x.set(-1.0);
+            world.player.direction = Direction::Left;
+        }
+        _ => (),
     }
 }
 
@@ -102,6 +109,7 @@ fn player_body(world: &mut World) {
 
 fn player_transition(world: &mut World) {
     world.player.rolly_polly_transition.tick(get_frame_time());
+    world.player.eye_x.tick(get_frame_time());
 }
 
 fn player_polly(world: &mut World) {
@@ -123,13 +131,10 @@ fn player_movement(world: &mut World) {
         linvel.y = -PLAYER_VEL_Y;
         angvel = 0.0;
     }
-
-    let movement_state = if is_key_down(KeyCode::Right) {
-        Some(1.0)
-    } else if is_key_down(KeyCode::Left) {
-        Some(-1.0)
-    } else {
-        None
+    let movement_state = match (is_key_down(KeyCode::Right), is_key_down(KeyCode::Left)) {
+        (true, false) => Some(1.0),
+        (false, true) => Some(-1.0),
+        _ => None,
     };
 
     if let Some(dir) = movement_state {
@@ -142,7 +147,9 @@ fn player_movement(world: &mut World) {
         if linvel.x.abs() < PLAYER_MAX_VEL {
             linvel.x += vel * dir;
         }
-        linvel.y -= vel;
+        if polly.feet_grounded {
+            linvel.y -= vel;
+        }
     }
 
     if feet_grounded {
@@ -167,8 +174,18 @@ fn player_movement(world: &mut World) {
 fn player_feet_grounded(world: &mut World) {
     let polly = world.player.body.unwrap_polly();
     let feet_grounded = 'outer: {
-        for floor in &world.floors {
-            if collider_intersecting(&world, floor.collider_handle, polly.feet_sensor_handle) {
+        // for entity in world.entities.iter().filter(|entity| entity.rigid()) {
+        //     if collider_intersecting(&world, entity.collider_handle(), polly.feet_sensor_handle) {
+        //         break 'outer true;
+        //     }
+        // }
+        for (_, (entity_collider, _)) in world
+            .entities
+            .query::<(&ColliderHandle, &Material)>()
+            .into_iter()
+            .filter(|(_, (_, material))| material.rigid())
+        {
+            if collider_intersecting(&world, *entity_collider, polly.feet_sensor_handle) {
                 break 'outer true;
             }
         }
@@ -188,4 +205,30 @@ fn collider_intersecting(
         .narrow_phase
         .intersection_pair(handle_1, handle_2)
         == Some(true)
+}
+
+fn player_water(world: &mut World) {
+    let player_collider = world.player.body.any_collider_handle();
+    let in_water = 'outer: {
+        for (_, (collider_handle, _)) in world
+            .entities
+            .query::<(&ColliderHandle, &Material)>()
+            .into_iter()
+            .filter(|(_, (_, material))| matches! {material, Material::Water})
+        {
+            if collider_intersecting(&world, *collider_handle, player_collider) {
+                break 'outer true;
+            }
+        }
+        false
+    };
+    let player_body = world.player.body.any_body_handle();
+    let player_body = world.physics_world.get_body_mut(player_body).unwrap();
+    let mut linvel = *player_body.linvel();
+    if in_water {
+        linvel.x -= linvel.x * (0.5 * get_frame_time()).clamp(0.0, 1.0);
+        linvel.y -= linvel.y * (0.5 * get_frame_time()).clamp(0.0, 1.0);
+        linvel.y -= 8.0 * get_frame_time();
+    }
+    player_body.set_linvel(linvel, true);
 }
