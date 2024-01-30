@@ -1,14 +1,9 @@
 use macroquad::prelude::*;
 
 pub mod consts;
-pub mod draw;
-pub mod polygon;
-pub mod update;
-pub mod world;
+pub mod game;
 
-use draw::draw;
-use update::update;
-use world::World;
+use game::{tick, Game};
 
 fn window_conf() -> Conf {
     Conf {
@@ -22,12 +17,12 @@ fn window_conf() -> Conf {
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    let mut world = World::new().await;
+    let mut game = Game::new().await;
     loop {
-        clear_background(RED);
-        update(&mut world);
-        draw(&world);
-
-        next_frame().await
+        tick(&mut game);
+        next_frame().await;
+        if game.quit() {
+            break;
+        }
     }
 }
