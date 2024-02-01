@@ -2,7 +2,7 @@ pub mod texture;
 pub mod ui;
 pub mod world;
 
-use self::texture::TextureHolder;
+use self::{texture::TextureHolder, ui::settings::Settings};
 use macroquad::prelude::*;
 
 use world::{draw::draw as draw_world, update::update as update_world, World};
@@ -16,6 +16,7 @@ pub struct Game {
 
 impl Game {
     pub async fn new() -> Self {
+        ui::init();
         Self {
             texture_holder: TextureHolder::new().await,
             settings: Settings::new(),
@@ -34,27 +35,19 @@ impl Game {
 
 pub fn tick(game: &mut Game) {
     if let Some(world) = &mut game.world {
-        draw_world(&game.texture_holder, world);
+        draw_world(&game.settings, &game.texture_holder, world);
         if let Screen::Running = game.screen {
-            update_world(world);
+            update_world(&game.settings, world);
         }
+    }
+    // if requested to quit, save world
+    if is_quit_requested() {
+        save_world(game);
     }
     ui::tick(game);
 }
 
-pub struct Settings {
-    pub volume: f32,
-    pub zoom: f32,
-}
-
-impl Settings {
-    pub fn new() -> Self {
-        Self {
-            volume: 1.0,
-            zoom: 1.0,
-        }
-    }
-}
+fn save_world(_game: &mut Game) {}
 
 pub struct SavedWorld {}
 

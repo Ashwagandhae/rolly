@@ -1,5 +1,4 @@
 use macroquad::prelude::*;
-
 pub mod consts;
 pub mod game;
 

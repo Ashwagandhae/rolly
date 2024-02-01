@@ -14,6 +14,10 @@ pub enum Material {
     Mud,
 }
 
+fn with_alpha(color: Color, alpha: f32) -> Color {
+    Color::new(color.r, color.g, color.b, alpha)
+}
+
 impl Material {
     pub fn rigid(self) -> bool {
         match self {
@@ -62,7 +66,10 @@ impl Material {
                 ],
                 vertices,
             )),
-            Self::Water => VertexDraw::Liquid(LiquidDraw::new(vertices, Color::from_hex(0x1667B1))),
+            Self::Water => VertexDraw::Liquid(LiquidDraw::new(
+                vertices,
+                with_alpha(Color::from_hex(0x1667B1), 1.0),
+            )),
         }
     }
 }

@@ -20,7 +20,6 @@ pub struct World {
     pub player: Player,
     pub entities: HecsWorld,
     pub camera_target: Vec2,
-    pub camera_zoom: f32,
     pub physics_world: PhysicsWorld,
 }
 
@@ -33,13 +32,10 @@ impl World {
 
         let player = Player::spawn(&mut physics_world);
 
-        let camera_zoom = 1.0;
-
         let mut world = Self {
             player,
             entities,
             camera_target,
-            camera_zoom,
             physics_world,
         };
 

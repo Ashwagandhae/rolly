@@ -1,91 +1,87 @@
-use macroquad::miniquad::window::screen_size;
+use egui_macroquad::egui::FontFamily::Proportional;
+use egui_macroquad::egui::{FontId, TextStyle};
+use egui_macroquad::{egui, egui::Ui};
 use macroquad::prelude::*;
-use macroquad::ui::{
-    hash, root_ui,
-    widgets::{self},
-    Skin,
-};
-use macroquad::ui::{Layout, Ui};
+
+pub mod settings;
+
+use self::settings::SettingKindMut;
 
 use super::world::World;
-use super::{Game, Screen};
+use super::{save_world, Game, Screen};
+use settings::{Setting, SettingInfo, Slider, Toggle};
 
 const MARGIN: f32 = 10.0;
 const ITEM_WIDTH: f32 = 200.0;
-const ITEM_HEIGHT: f32 = 60.0;
+const ITEM_HEIGHT: f32 = 0.0;
 
-fn skin() -> Skin {
-    let button_style = root_ui()
-        .style_builder()
-        .color(Color::from_rgba(255, 255, 255, 64))
-        .color_hovered(Color::from_rgba(255, 255, 255, 96))
-        .color_clicked(Color::from_rgba(255, 255, 255, 128))
-        .text_color(Color::from_rgba(255, 255, 255, 255))
-        .text_color_hovered(Color::from_rgba(255, 255, 255, 255))
-        .text_color_clicked(Color::from_rgba(255, 255, 255, 255))
-        .font_size(25)
-        .build();
-    let label_style = root_ui()
-        .style_builder()
-        .color(Color::from_rgba(255, 255, 255, 64))
-        .color_hovered(Color::from_rgba(255, 255, 255, 96))
-        .color_clicked(Color::from_rgba(255, 255, 255, 128))
-        .text_color(Color::from_rgba(255, 255, 255, 255))
-        .text_color_hovered(Color::from_rgba(255, 255, 255, 255))
-        .text_color_clicked(Color::from_rgba(255, 255, 255, 255))
-        .font_size(25)
-        .build();
-    let editbox_style = root_ui()
-        .style_builder()
-        .color(Color::from_rgba(255, 255, 255, 64))
-        .color_hovered(Color::from_rgba(255, 255, 255, 96))
-        .color_clicked(Color::from_rgba(255, 255, 255, 128))
-        .text_color(Color::from_rgba(255, 255, 255, 255))
-        .text_color_hovered(Color::from_rgba(255, 255, 255, 255))
-        .text_color_clicked(Color::from_rgba(255, 255, 255, 255))
-        .font_size(15)
-        .build();
-    let window_style = root_ui()
-        .style_builder()
-        .color(Color::from_rgba(0, 0, 0, 96))
-        .margin(RectOffset::new(MARGIN, MARGIN, MARGIN, MARGIN))
-        .build();
-    Skin {
-        button_style,
-        window_style,
-        editbox_style,
-        label_style,
-        ..root_ui().default_skin()
-    }
+pub fn init() {
+    egui_macroquad::ui(|egui_ctx| {
+        let mut style = (*egui_ctx.style()).clone();
+
+        style.spacing.item_spacing = egui::Vec2::new(MARGIN, MARGIN);
+        style.spacing.button_padding = egui::Vec2::new(MARGIN, MARGIN);
+        style.spacing.slider_width = ITEM_WIDTH - 70.0;
+        style.spacing.icon_width = 25.0;
+        style.spacing.icon_width_inner = 15.0;
+
+        *style.text_styles.get_mut(&TextStyle::Button).unwrap() = FontId::new(16.0, Proportional);
+        *style.text_styles.get_mut(&TextStyle::Body).unwrap() = FontId::new(16.0, Proportional);
+
+        style.visuals.widgets.inactive.weak_bg_fill =
+            egui::Color32::from_rgba_unmultiplied(255, 255, 255, 4);
+        style.visuals.widgets.hovered.weak_bg_fill =
+            egui::Color32::from_rgba_unmultiplied(255, 255, 255, 16);
+        style.visuals.widgets.active.weak_bg_fill =
+            egui::Color32::from_rgba_unmultiplied(255, 255, 255, 32);
+        style.visuals.widgets.inactive.bg_fill =
+            egui::Color32::from_rgba_unmultiplied(255, 255, 255, 8);
+        style.visuals.widgets.hovered.bg_fill =
+            egui::Color32::from_rgba_unmultiplied(255, 255, 255, 8);
+        style.visuals.widgets.active.bg_fill =
+            egui::Color32::from_rgba_unmultiplied(255, 255, 255, 8);
+
+        style.visuals.popup_shadow.extrusion = 0.0;
+        style.visuals.popup_shadow.color = egui::Color32::from_rgba_unmultiplied(0, 0, 0, 0);
+
+        style.visuals.widgets.inactive.rounding = MARGIN.into();
+        style.visuals.widgets.hovered.rounding = MARGIN.into();
+        style.visuals.widgets.active.rounding = MARGIN.into();
+        basic_window(|ui| {
+            ui.label("Loading...");
+        });
+        egui_ctx.set_style(style);
+    });
+    egui_macroquad::draw();
 }
 
 fn draw_buttons(mut game: &mut Game, ui: &mut Ui, buttons: &[(&str, fn(&mut Game))]) {
-    let mut y = 0.0;
-
     for (text, action) in buttons {
-        if widgets::Button::new(*text)
-            .position(vec2(0.0, y))
-            .size(vec2(ITEM_WIDTH, ITEM_HEIGHT))
-            .ui(ui)
-        {
+        let button = egui::Button::new(*text).min_size(egui::Vec2::new(ITEM_WIDTH, ITEM_HEIGHT));
+        if ui.add(button).clicked() {
             action(&mut game);
         }
-        y += ITEM_HEIGHT + MARGIN;
     }
 }
 
 fn basic_window(f: impl FnOnce(&mut Ui)) {
-    root_ui().window(
-        hash!("window", (screen_width() + screen_height()) as usize),
-        vec2(0., 0.),
-        vec2(ITEM_WIDTH + MARGIN * 2.0, screen_height()),
-        f,
-    );
+    egui_macroquad::ui(|egui_ctx| {
+        egui::CentralPanel::default()
+            .frame(
+                egui::Frame::none()
+                    .inner_margin(MARGIN)
+                    .fill(egui::Color32::from_rgba_premultiplied(0, 0, 0, 200)),
+            )
+            .show(egui_ctx, |ui| {
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), f)
+                });
+            });
+    });
+    egui_macroquad::draw();
 }
 
 pub fn tick(game: &mut Game) {
-    let skin = skin();
-    root_ui().push_skin(&skin);
     match game.screen {
         Screen::Home => home(game),
         Screen::Settings => settings(game, false),
@@ -102,12 +98,12 @@ fn home(game: &mut Game) {
             game,
             ui,
             &[
-                ("New World", |game| {
+                ("new world", |game| {
                     new_world(game);
                     game.screen = Screen::Running;
                 }),
-                ("Settings", |game| change_screen(game, Screen::Settings)),
-                ("Quit", |game| change_screen(game, Screen::Quit)),
+                ("settings", |game| change_screen(game, Screen::Settings)),
+                ("quit", |game| change_screen(game, Screen::Quit)),
             ],
         )
     });
@@ -117,40 +113,106 @@ fn new_world(game: &mut Game) {
     game.world = Some(World::new(&game.texture_holder));
 }
 
+fn draw_label(ui: &mut Ui, setting: &Setting<impl SettingInfo>) {
+    egui::Frame::none()
+        .inner_margin(egui::Margin::symmetric(0.0, MARGIN))
+        .show(ui, |ui| ui.add(egui::Label::new(setting.name)));
+}
+fn draw_reset_button(ui: &mut Ui, setting: &mut Setting<impl SettingInfo>) {
+    if setting.value != setting.info.default_value() {
+        if ui.add(egui::Button::new("reset")).clicked() {
+            setting.value = setting.info.default_value();
+        }
+    }
+}
+
+fn draw_slider(ui: &mut Ui, setting: &mut Setting<Slider>) {
+    ui.horizontal(|ui| {
+        ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                draw_label(ui, setting);
+                draw_reset_button(ui, setting);
+            });
+
+            ui.add(egui::Slider::new(
+                &mut setting.value,
+                setting.info.range.clone(),
+            ));
+        });
+    });
+}
+
+fn draw_toggle(ui: &mut Ui, setting: &mut Setting<Toggle>) {
+    ui.horizontal(|ui| {
+        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+            draw_label(ui, setting);
+            ui.add(toggle(&mut setting.value));
+            draw_reset_button(ui, setting);
+        });
+    });
+}
+
+/// Here is the same code again, but a bit more compact:
+fn toggle_ui_compact(ui: &mut egui::Ui, on: &mut bool) -> egui::Response {
+    let desired_size = ui.spacing().interact_size.y * egui::vec2(2.0, 1.0);
+    let (rect, mut response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
+    if response.clicked() {
+        *on = !*on;
+        response.mark_changed();
+    }
+    response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Checkbox, *on, ""));
+
+    if ui.is_rect_visible(rect) {
+        let how_on = ui.ctx().animate_bool(response.id, *on);
+        let visuals = ui.style().interact_selectable(&response, *on);
+        let rect = rect.expand(visuals.expansion);
+        let radius = 0.5 * rect.height();
+        ui.painter()
+            .rect(rect, radius, visuals.bg_fill, visuals.bg_stroke);
+        let circle_x = egui::lerp((rect.left() + radius)..=(rect.right() - radius), how_on);
+        let center = egui::pos2(circle_x, rect.center().y);
+        ui.painter()
+            .circle(center, 0.75 * radius, visuals.bg_fill, visuals.fg_stroke);
+    }
+
+    response
+}
+
+// A wrapper that allows the more idiomatic usage pattern: `ui.add(toggle(&mut my_bool))`
+/// iOS-style toggle switch.
+///
+/// ## Example:
+/// ``` ignore
+/// ui.add(toggle(&mut my_bool));
+/// ```
+pub fn toggle(on: &mut bool) -> impl egui::Widget + '_ {
+    move |ui: &mut egui::Ui| toggle_ui_compact(ui, on)
+}
+
 fn settings(game: &mut Game, paused: bool) {
     basic_window(|ui| {
-        // widgets::Slider::new(
-        //     &mut game.settings.volume,
-        //     0.0..=1.0,
-        // )
-        // .position(vec2(0.0, 0.0))
-        const SETTINGS_ITEM_COUNT: f32 = 3.0;
-
-        widgets::Group::new(
-            hash!(),
-            vec2(
-                ITEM_WIDTH + MARGIN * 2.0,
-                (ITEM_HEIGHT + MARGIN) * SETTINGS_ITEM_COUNT,
-            ),
-        )
-        .ui(ui, |ui| {
-            widgets::Slider::new(hash!(), 0.0..1.0).ui(ui, &mut game.settings.volume);
-        });
-        widgets::Group::new(
-            hash!(),
-            vec2(ITEM_WIDTH + MARGIN * 2.0, (ITEM_HEIGHT + MARGIN) * 1.0),
-        )
-        .ui(ui, |ui| {
-            draw_buttons(
-                game,
-                ui,
-                &[if paused {
-                    ("Back", |game| change_screen(game, Screen::Paused))
-                } else {
-                    ("Home", |game| change_screen(game, Screen::Home))
-                }],
-            );
-        });
+        if is_key_pressed(KeyCode::Escape) {
+            if paused {
+                change_screen(game, Screen::Paused);
+            } else {
+                change_screen(game, Screen::Home);
+            }
+        }
+        for setting in &mut game.settings.iter_mut() {
+            match setting {
+                SettingKindMut::Slider(setting) => draw_slider(ui, setting),
+                SettingKindMut::Toggle(setting) => draw_toggle(ui, setting),
+            }
+        }
+        draw_buttons(
+            game,
+            ui,
+            &[if paused {
+                ("back", |game| change_screen(game, Screen::Paused))
+            } else {
+                ("back", |game| change_screen(game, Screen::Home))
+            }],
+        );
     });
 }
 
@@ -163,12 +225,12 @@ fn paused(game: &mut Game) {
             game,
             ui,
             &[
-                ("Resume", |game| change_screen(game, Screen::Running)),
-                ("Settings", |game| {
+                ("resume", |game| change_screen(game, Screen::Running)),
+                ("settings", |game| {
                     change_screen(game, Screen::SettingsPaused)
                 }),
-                ("Save", |game| save_world(game)),
-                ("Home", |game| change_screen(game, Screen::Home)),
+                ("save", |game| save_world(game)),
+                ("save & back", |game| change_screen(game, Screen::Home)),
             ],
         );
     });
@@ -185,15 +247,30 @@ fn change_screen(game: &mut Game, screen: Screen) {
     game.screen = screen;
 }
 
+fn constrain_slider(setting: &mut Setting<Slider>) {
+    setting.value = setting
+        .value
+        .clamp(*setting.info.range.start(), *setting.info.range.end());
+}
+
 fn running(game: &mut Game) {
     if is_key_pressed(KeyCode::Escape) {
         game.screen = Screen::Paused;
     }
+    let settings = &mut game.settings;
+    if is_key_down(KeyCode::Equal) {
+        settings.zoom.value *= 1.01;
+    }
+    if is_key_down(KeyCode::Minus) {
+        settings.zoom.value *= 0.99;
+    }
+    if is_key_pressed(KeyCode::Key0) {
+        settings.zoom.value = 1.0;
+    }
+    constrain_slider(&mut settings.zoom);
 }
 
 fn quit(_game: &mut Game) {}
-
-fn save_world(_game: &mut Game) {}
 
 // pub struct Game {
 //     texture_holder: TextureHolder,

@@ -1,4 +1,7 @@
-use crate::{consts::*, game::texture::TextureHolder};
+use crate::{
+    consts::*,
+    game::{texture::TextureHolder, Settings},
+};
 
 use super::World;
 use macroquad::prelude::*;
@@ -6,21 +9,26 @@ use macroquad::prelude::*;
 pub mod floor;
 pub mod player;
 
-pub fn draw(texture_holder: &TextureHolder, world: &World) {
+pub fn draw(settings: &Settings, texture_holder: &TextureHolder, world: &World) {
     set_camera(&Camera2D {
-        zoom: camera_zoom(world),
+        // zoom: camera_zoom(world), — works in macroquad 0.4.*
+        // need to use this to make it work in 0.3.*, to address screen flipping bug
+        zoom: vec2(
+            camera_zoom(settings, world).x,
+            -camera_zoom(settings, world).y,
+        ),
         target: world.camera_target,
         ..Default::default()
     });
-    draw_back(texture_holder, world);
+    draw_back(settings, texture_holder, world);
     player::draw(texture_holder, world);
     floor::draw(texture_holder, world);
 }
 
-pub fn camera_zoom(world: &World) -> Vec2 {
+pub fn camera_zoom(settings: &Settings, _world: &World) -> Vec2 {
     vec2(
-        1. * ZOOM * world.camera_zoom,
-        screen_width() / screen_height() * ZOOM * world.camera_zoom,
+        1. * ZOOM * settings.zoom.value,
+        screen_width() / screen_height() * ZOOM * settings.zoom.value,
     )
 }
 
@@ -34,7 +42,7 @@ pub fn draw_texture_centered(
     let (size, texture) = &texture_holder[texture_file];
     let size = Vec2::new(pixel_to_meter(size.0 as f32), pixel_to_meter(size.1 as f32));
     draw_texture_ex(
-        texture,
+        *texture,
         pos.x - size.x / 2.0,
         pos.y - size.y / 2.0,
         WHITE,
@@ -103,7 +111,7 @@ fn draw_trimesh(vertices: &[Vec2], indices: &[[u32; 3]], color: Color) {
     }
 }
 
-fn draw_back(texture_holder: &TextureHolder, world: &World) {
+fn draw_back(settings: &Settings, texture_holder: &TextureHolder, world: &World) {
     let back_items: &[((Option<&str>, _, Option<&str>), f32)] = &[
         ((Some("sky_up"), "sky", None), 0.2),
         ((None, "hills", Some("hills_down")), 0.4),
@@ -114,7 +122,7 @@ fn draw_back(texture_holder: &TextureHolder, world: &World) {
             vec2(pixel_to_meter(size.0 as f32), pixel_to_meter(size.1 as f32))
         };
         let y = parallax(zoom, 3.0, world.camera_target.y);
-        for x in tiled_parallax_x(world, zoom, size.x, 0.0) {
+        for x in tiled_parallax_x(settings, world, zoom, size.x, 0.0) {
             let pos = Vec2::new(x, y);
             draw_texture_centered(texture_holder, texture, pos, 0.0, None);
         }
@@ -123,11 +131,11 @@ fn draw_back(texture_holder: &TextureHolder, world: &World) {
                 let size = texture_holder[up_texture].0;
                 vec2(pixel_to_meter(size.0 as f32), pixel_to_meter(size.1 as f32))
             };
-            for y_up in tiled_parallax_y(world, zoom, size_up.y, 0.0) {
+            for y_up in tiled_parallax_y(settings, world, zoom, size_up.y, 0.0) {
                 if y_up + size_up.y * 2.1 >= y {
                     break;
                 }
-                for x_up in tiled_parallax_x(world, zoom, size_up.x, 0.0) {
+                for x_up in tiled_parallax_x(settings, world, zoom, size_up.x, 0.0) {
                     let pos = Vec2::new(x_up, y_up);
                     draw_texture_centered(texture_holder, up_texture, pos, 0.0, None);
                 }
@@ -138,11 +146,13 @@ fn draw_back(texture_holder: &TextureHolder, world: &World) {
                 let size = texture_holder[down_texture].0;
                 vec2(pixel_to_meter(size.0 as f32), pixel_to_meter(size.1 as f32))
             };
-            for y_down in tiled_parallax_y(world, zoom, size_down.y, -size_down.y / 2.0).rev() {
+            for y_down in
+                tiled_parallax_y(settings, world, zoom, size_down.y, -size_down.y / 2.0).rev()
+            {
                 if y_down - size_down.y * 2.0 <= y {
                     break;
                 }
-                for x_down in tiled_parallax_x(world, zoom, size_down.x, 0.0) {
+                for x_down in tiled_parallax_x(settings, world, zoom, size_down.x, 0.0) {
                     let pos = Vec2::new(x_down, y_down);
                     draw_texture_centered(texture_holder, down_texture, pos, 0.0, None);
                 }
@@ -163,24 +173,26 @@ fn draw_back(texture_holder: &TextureHolder, world: &World) {
 // }
 
 fn tiled_parallax_x(
+    settings: &Settings,
     world: &World,
     zoom: f32,
     size: f32,
     offset_backwards: f32,
 ) -> impl Iterator<Item = f32> + DoubleEndedIterator {
-    let camera_start_x = world.camera_target.x - 1.0 / camera_zoom(world).x;
-    let camera_end_x = world.camera_target.x + 1.0 / camera_zoom(world).x;
+    let camera_start_x = world.camera_target.x - 1.0 / camera_zoom(settings, world).x;
+    let camera_end_x = world.camera_target.x + 1.0 / camera_zoom(settings, world).x;
     tiled_parallax(zoom, size, offset_backwards, camera_start_x, camera_end_x)
 }
 fn tiled_parallax_y(
+    settings: &Settings,
     world: &World,
     zoom: f32,
     size: f32,
     offset_backwards: f32,
 ) -> impl Iterator<Item = f32> + DoubleEndedIterator {
     let factor = screen_height() / screen_width() * 2.0;
-    let camera_start_y = world.camera_target.y - factor / camera_zoom(world).y;
-    let camera_end_y = world.camera_target.y + factor / camera_zoom(world).y;
+    let camera_start_y = world.camera_target.y - factor / camera_zoom(settings, world).y;
+    let camera_end_y = world.camera_target.y + factor / camera_zoom(settings, world).y;
     tiled_parallax(zoom, size, offset_backwards, camera_start_y, camera_end_y)
 }
 

@@ -3,13 +3,13 @@ use super::player::{Body, Polly, Rolly};
 
 use super::World;
 use crate::consts::*;
+use crate::game::Settings;
 use macroquad::prelude::*;
 use nalgebra::UnitComplex;
 use rapier2d::prelude::*;
 
-pub fn update(world: &mut World) {
-    update_zoom(world);
-    update_camera(world);
+pub fn update(settings: &Settings, world: &mut World) {
+    update_camera(settings, world);
 
     world.physics_world.update();
 
@@ -22,7 +22,7 @@ pub fn update(world: &mut World) {
     }
 }
 
-fn update_camera(world: &mut World) {
+fn update_camera(settings: &Settings, world: &mut World) {
     let camera_target: Vec2 = (*world
         .physics_world
         .get_body(world.player.body.any_body_handle())
@@ -30,19 +30,7 @@ fn update_camera(world: &mut World) {
         .translation())
     .into();
     let diff = camera_target - world.camera_target;
-    world.camera_target += diff * 0.1;
-}
-
-fn update_zoom(world: &mut World) {
-    if is_key_down(KeyCode::Equal) {
-        world.camera_zoom *= 1.01;
-    }
-    if is_key_down(KeyCode::Minus) {
-        world.camera_zoom *= 0.99;
-    }
-    if is_key_pressed(KeyCode::Key0) {
-        world.camera_zoom = 1.0;
-    }
+    world.camera_target += diff * settings.camera_speed.value;
 }
 
 use super::player::Direction;
@@ -166,7 +154,6 @@ fn player_movement(world: &mut World) {
         (false, true) => {
             angvel -= 2.0;
         }
-        (false, false) => {}
         _ => (),
     }
 
