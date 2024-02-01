@@ -1,5 +1,5 @@
 use egui_macroquad::egui::FontFamily::Proportional;
-use egui_macroquad::egui::{FontId, TextStyle};
+use egui_macroquad::egui::{Context, FontId, TextStyle};
 use egui_macroquad::{egui, egui::Ui};
 use macroquad::prelude::*;
 
@@ -9,13 +9,25 @@ use self::settings::SettingKindMut;
 
 use super::world::World;
 use super::{save_world, Game, Screen};
-use settings::{Setting, SettingInfo, Slider, Toggle};
+use settings::{Setting, SettingInfo, Settings, Slider, Toggle};
 
 const MARGIN: f32 = 10.0;
 const ITEM_WIDTH: f32 = 200.0;
 const ITEM_HEIGHT: f32 = 0.0;
-
-pub fn init() {
+pub fn update_ui_scale(ctx: &Context, settings: &Settings) {
+    ctx.set_pixels_per_point(
+        match settings.ui_scale.info.options[settings.ui_scale.value] {
+            ".25x" => 0.25,
+            ".5x" => 0.5,
+            "1x" => 1.0,
+            "2x" => 2.0,
+            "4x" => 4.0,
+            "6x" => 6.0,
+            _ => 1.0,
+        },
+    );
+}
+pub fn init(settings: &Settings) {
     egui_macroquad::ui(|egui_ctx| {
         let mut style = (*egui_ctx.style()).clone();
 
@@ -24,6 +36,23 @@ pub fn init() {
         style.spacing.slider_width = ITEM_WIDTH - 70.0;
         style.spacing.icon_width = 25.0;
         style.spacing.icon_width_inner = 15.0;
+
+        // create new font family
+        let mut fonts = egui::FontDefinitions::default();
+        fonts.font_data.insert(
+            "JetBrains".to_owned(),
+            egui::FontData::from_static(include_bytes!(
+                "../../assets/fonts/JetBrainsMono-Regular.ttf"
+            )),
+        );
+
+        fonts
+            .families
+            .entry(egui::FontFamily::Proportional)
+            .or_default()
+            .insert(0, "JetBrains".to_owned());
+
+        egui_ctx.set_fonts(fonts);
 
         *style.text_styles.get_mut(&TextStyle::Button).unwrap() = FontId::new(16.0, Proportional);
         *style.text_styles.get_mut(&TextStyle::Body).unwrap() = FontId::new(16.0, Proportional);
@@ -50,6 +79,7 @@ pub fn init() {
         basic_window(|ui| {
             ui.label("Loading...");
         });
+        update_ui_scale(egui_ctx, settings);
         egui_ctx.set_style(style);
     });
     egui_macroquad::draw();
@@ -152,6 +182,22 @@ fn draw_toggle(ui: &mut Ui, setting: &mut Setting<Toggle>) {
     });
 }
 
+fn draw_combo_box(ui: &mut Ui, setting: &mut Setting<settings::ComboBox>) {
+    ui.horizontal(|ui| {
+        ui.with_layout(egui::Layout::top_down(egui::Align::LEFT), |ui| {
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                draw_label(ui, setting);
+                draw_reset_button(ui, setting);
+            });
+            egui::ComboBox::from_label("")
+                .selected_text(setting.info.options[setting.value])
+                .show_index(ui, &mut setting.value, setting.info.options.len(), |i| {
+                    setting.info.options[i].to_owned()
+                });
+        });
+    });
+}
+
 /// Here is the same code again, but a bit more compact:
 fn toggle_ui_compact(ui: &mut egui::Ui, on: &mut bool) -> egui::Response {
     let desired_size = ui.spacing().interact_size.y * egui::vec2(2.0, 1.0);
@@ -191,6 +237,8 @@ pub fn toggle(on: &mut bool) -> impl egui::Widget + '_ {
 
 fn settings(game: &mut Game, paused: bool) {
     basic_window(|ui| {
+        update_ui_scale(ui.ctx(), &game.settings);
+
         if is_key_pressed(KeyCode::Escape) {
             if paused {
                 change_screen(game, Screen::Paused);
@@ -202,6 +250,7 @@ fn settings(game: &mut Game, paused: bool) {
             match setting {
                 SettingKindMut::Slider(setting) => draw_slider(ui, setting),
                 SettingKindMut::Toggle(setting) => draw_toggle(ui, setting),
+                SettingKindMut::ComboBox(setting) => draw_combo_box(ui, setting),
             }
         }
         draw_buttons(

@@ -16,7 +16,8 @@ pub struct Game {
 
 impl Game {
     pub async fn new() -> Self {
-        ui::init();
+        let settings = Settings::new();
+        ui::init(&settings);
         Self {
             texture_holder: TextureHolder::new().await,
             settings: Settings::new(),
