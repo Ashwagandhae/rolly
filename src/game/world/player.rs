@@ -34,7 +34,7 @@ impl Polly {
                 .angvel(angvel)
                 .linear_damping(PLAYER_LINEAR_DAMPING)
                 .angular_damping(PLAYER_ANGULAR_DAMPING)
-                .ccd_enabled(true)
+                .ccd_enabled(CCD_ENABLED)
                 .build(),
             ColliderBuilder::capsule_x(0.05, 0.05)
                 .friction(PLAYER_FRICTION)
@@ -93,7 +93,7 @@ impl Rolly {
                 .angvel(angvel)
                 .linear_damping(PLAYER_ROLLY_LINEAR_DAMPING)
                 .angular_damping(PLAYER_ROLLY_ANGULAR_DAMPING)
-                .ccd_enabled(true)
+                .ccd_enabled(CCD_ENABLED)
                 .build(),
             ColliderBuilder::ball(0.075)
                 .friction(PLAYER_FRICTION)

@@ -4,7 +4,6 @@ use rapier2d::prelude::*;
 use crate::game::assets::Assets;
 
 use super::{
-    draw::pixel_to_meter,
     polygon::trimesh_indices_from_polygon,
     svg::{read_svg, SvgShape},
 };

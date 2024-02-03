@@ -47,6 +47,42 @@ pub fn trimesh_indices_from_polygon(vertices: &[Vec2]) -> Vec<[u32; 3]> {
     indices
 }
 
+// only include outer edge triangles
+pub fn trimesh_indices_from_polygon_minimal(vertices: &[Vec2]) -> Vec<[u32; 3]> {
+    let vertices_index_map: HashMap<OrderedVec2, u32> = vertices
+        .iter()
+        .enumerate()
+        .map(|(i, v)| ((*v).into(), i as u32))
+        .collect();
+    let triangles = triangulate_polygon(vertices);
+    let map = |v: Vec2| -> u32 { vertices_index_map[&v.into()] };
+    let index_distance = |i: u32, j: u32| -> u32 {
+        // get circular distance between two indices
+        let len = vertices.len() as u32;
+        let distance = (i as i32 - j as i32).abs() as u32;
+        if distance > len / 2 {
+            len - distance
+        } else {
+            distance
+        }
+    };
+    let indices = triangles
+        .into_iter()
+        .filter_map(|[v1, v2, v3]| {
+            let ret = [map(v1), map(v2), map(v3)];
+            if index_distance(ret[0], ret[1]) == 1
+                || index_distance(ret[1], ret[2]) == 1
+                || index_distance(ret[2], ret[0]) == 1
+            {
+                Some(ret)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+    indices
+}
+
 pub fn triangulate_polygon(vertices: &[Vec2]) -> Vec<[Vec2; 3]> {
     match vertices.len() {
         0..=2 => panic!("too few vertices: {}", vertices.len()),

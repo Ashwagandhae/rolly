@@ -1,12 +1,14 @@
+
+
 use macroquad::prelude::*;
+use rapier2d::dynamics::RigidBodyHandle;
 
 use crate::game::assets::Assets;
-use crate::game::ui::settings::Settings;
 use crate::game::world::floor::Material;
 use crate::game::world::svg::{read_svg, SvgShape};
 use crate::game::world::thing::ThingInfo;
 
-use super::draw::{meter_to_pixel, pos_in_camera};
+use super::draw::{get_camera_rect, meter_to_pixel, pos_in_camera};
 use super::floor::spawn_floor;
 use super::thing::spawn_thing;
 use super::World;
@@ -15,14 +17,26 @@ use super::World;
 pub struct LevelId(pub usize);
 
 impl LevelId {
-    fn next(&self) -> Self {
-        LevelId(self.0 + 1)
+    fn valid(&self, assets: &Assets) -> bool {
+        assets.levels.contains_key(&self.0)
     }
-    fn prev(&self) -> Option<Self> {
-        if self.0 == 0 {
-            None
+    fn next(&self, assets: &Assets) -> Option<LevelId> {
+        let next = LevelId(self.0 + 1);
+        if next.valid(assets) {
+            Some(next)
         } else {
-            Some(LevelId(self.0 - 1))
+            None
+        }
+    }
+    fn prev(&self, assets: &Assets) -> Option<LevelId> {
+        if self.0 == 0 {
+            return None;
+        }
+        let prev = LevelId(self.0 - 1);
+        if prev.valid(assets) {
+            Some(prev)
+        } else {
+            None
         }
     }
 }
@@ -79,6 +93,7 @@ impl LevelInfo {
 }
 
 pub fn load_level(assets: &Assets, world: &mut World, level: LevelId, pos: Vec2) {
+    println!("Loading level {}", level.0);
     let (_, svg) = &assets.levels[&level.0];
     let (_, items) = read_svg(svg);
     for item in items {
@@ -101,26 +116,91 @@ pub fn load_level(assets: &Assets, world: &mut World, level: LevelId, pos: Vec2)
     world.levels.insert(level, pos);
 }
 
-pub fn update_loaded_levels(assets: &Assets, settings: &Settings, world: &mut World) {
-    for (level, pos) in world.levels.clone() {
-        load_adjacent_levels(assets, settings, world, level, pos);
+pub fn unload_level(world: &mut World, level: LevelId) {
+    println!("Unloading level {}", level.0);
+    world.levels.remove(&level).unwrap();
+    let remove_entities = world
+        .entities
+        .query_mut::<&LevelId>()
+        .into_iter()
+        .filter(|(_, entity_level)| **entity_level == level)
+        .map(|(entity, _)| entity)
+        .collect::<Vec<_>>();
+    for entity in remove_entities {
+        if let Some(body) = world
+            .entities
+            .entity(entity)
+            .ok()
+            .and_then(|e| e.get::<&RigidBodyHandle>())
+        {
+            world.physics_world.remove_body(*body);
+        }
+        world.entities.despawn(entity).unwrap();
     }
 }
 
-fn load_adjacent_levels(
+pub fn update_loaded_levels(assets: &Assets, world: &mut World) {
+    // for (level, pos) in world.levels.clone() {
+    //     load_adjacent_levels(assets, world, level, pos);
+    // }
+    let levels_to_load = world
+        .levels
+        .iter()
+        .flat_map(|(level, pos)| find_adjacent_levels_to_load(assets, world, *level, *pos))
+        .filter_map(|x| x)
+        .collect::<Vec<_>>();
+    let levels_to_unload = find_levels_to_unload(assets, world);
+    for &(level, pos) in levels_to_load.iter() {
+        if !world.levels.contains_key(&level) {
+            load_level(assets, world, level, pos);
+        }
+    }
+    for level in levels_to_unload {
+        if !levels_to_load.iter().any(|(l, _)| *l == level) {
+            unload_level(world, level);
+        }
+    }
+}
+
+fn find_adjacent_levels_to_load(
     assets: &Assets,
-    settings: &Settings,
-    world: &mut World,
+    world: &World,
     level: LevelId,
     pos: Vec2,
-) {
+) -> [Option<(LevelId, Vec2)>; 2] {
     let (info, _) = &assets.levels[&level.0];
-    let (next_level, end_pos) = (level.next(), info.markers.end);
-    if !world.levels.contains_key(&next_level) && pos_in_camera(settings, world, pos + end_pos) {
-        let Some((new_info, _)) = &assets.levels.get(&next_level.0) else {
-            return;
-        };
-        let new_pos = dbg!(pos) + dbg!(info.markers.end) - dbg!(new_info.markers.start);
-        load_level(assets, world, next_level, new_pos);
-    }
+
+    let load_queries: [(Option<LevelId>, Vec2, fn(&LevelInfo, &LevelInfo) -> Vec2); 2] = [
+        (level.next(assets), info.markers.end, |info, next_info| {
+            info.markers.end - next_info.markers.start
+        }),
+        (level.prev(assets), info.markers.start, |info, prev_info| {
+            info.markers.start - prev_info.markers.end
+        }),
+    ];
+    load_queries.map(|(edge_level, end_pos, new_pos)| {
+        if !pos_in_camera(world, pos + end_pos) {
+            return None;
+        }
+        let edge_level = edge_level?;
+        let (new_info, _) = &assets.levels.get(&edge_level.0)?;
+        let new_pos = pos + new_pos(info, new_info);
+        Some((edge_level, new_pos))
+    })
+}
+
+fn find_levels_to_unload(assets: &Assets, world: &World) -> Vec<LevelId> {
+    world
+        .levels
+        .iter()
+        .filter_map(|(level, pos)| {
+            let info = &assets.levels[&level.0].0;
+            let rect = Rect::new(pos.x, pos.y, info.dims.x, info.dims.y);
+            if !get_camera_rect(world).overlaps(&rect) {
+                Some(*level)
+            } else {
+                None
+            }
+        })
+        .collect()
 }

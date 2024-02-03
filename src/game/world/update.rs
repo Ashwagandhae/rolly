@@ -1,5 +1,6 @@
 use super::floor::Material;
 use super::level::update_loaded_levels;
+use super::physics_world::PhysicsWorld;
 use super::player::{Body, Polly, Rolly};
 
 use super::World;
@@ -13,7 +14,7 @@ use rapier2d::prelude::*;
 pub fn update(assets: &Assets, settings: &Settings, world: &mut World) {
     update_camera(settings, world);
 
-    update_loaded_levels(assets, settings, world);
+    update_loaded_levels(assets, world);
     world.physics_world.update();
 
     player_body(world);
@@ -32,8 +33,22 @@ fn update_camera(settings: &Settings, world: &mut World) {
         .unwrap()
         .translation())
     .into();
-    let diff = camera_target - world.camera_target;
-    world.camera_target += diff * settings.camera_speed.value;
+    let diff = camera_target - world.camera.target;
+    world.camera.target += diff * settings.camera_speed.value;
+    world.camera = Camera2D {
+        // zoom: camera_zoom(world), — works in macroquad 0.4.*
+        // need to use this to make it work in 0.3.*, to address screen flipping bug
+        zoom: vec2(camera_zoom(settings).x, -camera_zoom(settings).y),
+        ..world.camera
+    };
+    set_camera(&world.camera);
+}
+
+pub fn camera_zoom(settings: &Settings) -> Vec2 {
+    vec2(
+        1. * ZOOM * settings.zoom.value,
+        screen_width() / screen_height() * ZOOM * settings.zoom.value,
+    )
 }
 
 use super::player::Direction;
@@ -168,14 +183,18 @@ fn player_movement(world: &mut World) {
 
 fn player_feet_grounded(world: &mut World) {
     let polly = world.player.body.unwrap_polly();
-    let get = |index: usize| {
+    let mut get = |index: usize| {
         for (_, (entity_collider, _)) in world
             .entities
-            .query::<(&ColliderHandle, &Material)>()
+            .query_mut::<(&ColliderHandle, &Material)>()
             .into_iter()
             .filter(|(_, (_, material))| material.rigid())
         {
-            if collider_intersecting(&world, *entity_collider, polly.feet_sensor_handles[index]) {
+            if collider_intersecting(
+                &world.physics_world,
+                *entity_collider,
+                polly.feet_sensor_handles[index],
+            ) {
                 return true;
             }
         }
@@ -187,12 +206,11 @@ fn player_feet_grounded(world: &mut World) {
 }
 
 fn collider_intersecting(
-    world: &World,
+    physics_world: &PhysicsWorld,
     handle_1: ColliderHandle,
     handle_2: ColliderHandle,
 ) -> bool {
-    world
-        .physics_world
+    physics_world
         .narrow_phase
         .intersection_pair(handle_1, handle_2)
         == Some(true)
@@ -203,11 +221,11 @@ fn player_water(world: &mut World) {
     let in_water = 'outer: {
         for (_, (collider_handle, _)) in world
             .entities
-            .query::<(&ColliderHandle, &Material)>()
+            .query_mut::<(&ColliderHandle, &Material)>()
             .into_iter()
             .filter(|(_, (_, material))| matches! {material, Material::Water})
         {
-            if collider_intersecting(&world, *collider_handle, player_collider) {
+            if collider_intersecting(&world.physics_world, *collider_handle, player_collider) {
                 break 'outer true;
             }
         }

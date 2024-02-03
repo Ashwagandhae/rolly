@@ -1,6 +1,6 @@
 use super::draw::floor::{LiquidDraw, TiledDraw};
 use super::level::LevelId;
-use super::polygon::trimesh_indices_from_polygon;
+use super::polygon::{trimesh_indices_from_polygon, trimesh_indices_from_polygon_minimal};
 use super::World;
 use crate::consts::*;
 use crate::game::assets::Assets;
@@ -92,8 +92,14 @@ pub fn spawn_floor(
     let vertices = vertices.iter().map(|v| *v + pos).collect::<Vec<_>>();
     let trimesh_indices = trimesh_indices_from_polygon(&vertices);
     let builder = {
+        let trimesh_indices = if material.rigid() {
+            // no need for collision on inner triangles
+            trimesh_indices_from_polygon_minimal(&vertices)
+        } else {
+            trimesh_indices.clone()
+        };
         let vertices = vertices.iter().map(|&v| v.into()).collect::<Vec<_>>();
-        ColliderBuilder::trimesh(vertices, trimesh_indices.clone())
+        ColliderBuilder::trimesh(vertices, trimesh_indices)
             .friction(PLATFORM_FRICTION)
             .friction_combine_rule(CoefficientCombineRule::Max)
     };

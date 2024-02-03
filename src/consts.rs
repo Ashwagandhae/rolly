@@ -18,3 +18,5 @@ pub const PIXEL_TO_METER: f32 = 120.0 / 0.2;
 pub const TILE_WIDTH: f32 = 80.0;
 pub const TILE_HEIGHT: f32 = 120.0;
 pub const TILE_DOWN: f32 = 20.0;
+
+pub const CCD_ENABLED: bool = false;

@@ -2,7 +2,7 @@ use std::f32::consts::PI;
 
 use super::super::floor::VertexDraw;
 use super::super::polygon::{shrink_polygon, trimesh_indices_from_polygon};
-use super::{draw_texture_centered, draw_trimesh, pixel_to_meter};
+use super::{draw_texture_centered, draw_trimesh, get_camera_rect, pixel_to_meter};
 use crate::consts::*;
 use crate::game::assets::{Assets, TileConstraints};
 use crate::game::world::thing::ThingDraw;
@@ -21,7 +21,7 @@ pub fn draw(assets: &Assets, world: &World) {
         if let Or::Left(vertex_draw) | Or::Both(vertex_draw, _) = draw {
             match vertex_draw {
                 VertexDraw::Tiled(tiled_draw) => {
-                    draw_tiled(assets, tiled_draw);
+                    draw_tiled(assets, world, tiled_draw);
                 }
                 VertexDraw::Liquid(liquid_draw) => {
                     draw_liquid(liquid_draw);
@@ -34,16 +34,34 @@ pub fn draw(assets: &Assets, world: &World) {
     }
 }
 
-pub fn draw_tiled(assets: &Assets, tiled_draw: &TiledDraw) {
+fn two_points_rect(v1: Vec2, v2: Vec2) -> Rect {
+    let start = vec2(v1.x.min(v2.x), v1.y.min(v2.y));
+    let end = vec2(v1.x.max(v2.x), v1.y.max(v2.y));
+    Rect::new(start.x, start.y, end.x - start.x, end.y - start.y)
+}
+
+fn add_rect_padding(rect: Rect, padding: f32) -> Rect {
+    Rect::new(
+        rect.x - padding,
+        rect.y - padding,
+        rect.w + padding * 2.0,
+        rect.h + padding * 2.0,
+    )
+}
+
+pub fn draw_tiled(assets: &Assets, world: &World, tiled_draw: &TiledDraw) {
     for ((vertices, indices), color) in tiled_draw.trimeshes.iter().zip(tiled_draw.colors.iter()) {
         draw_trimesh(vertices, indices, *color)
     }
     let vertices = &tiled_draw.trimeshes[0].0;
-    for ((_, &v1, &v2, _), (left_offset, textures)) in vertices
+    for ((_, &v1, &v2, _), (rect, left_offset, textures)) in vertices
         .iter()
         .circular_tuple_windows()
         .zip(tiled_draw.tile_textures.iter())
     {
+        if !get_camera_rect(world).overlaps(rect) {
+            continue;
+        }
         let rotation = Vec2::new(1.0, 0.0).angle_between(v1 - v2);
         let rotation_down = rotation + PI / 2.0;
         let draw_on_line = |dist: f32, texture_file: &str| {
@@ -78,7 +96,7 @@ pub struct TiledDraw {
     pub tile: &'static str,
     pub colors: [Color; 3],
     pub trimeshes: [(Vec<Vec2>, Vec<[u32; 3]>); 3],
-    pub tile_textures: Vec<(f32, Vec<String>)>,
+    pub tile_textures: Vec<(Rect, f32, Vec<String>)>,
 }
 
 impl TiledDraw {
@@ -116,7 +134,9 @@ impl TiledDraw {
                     .into_iter()
                     .map(|s| s.to_string())
                     .collect();
-                (full_left_offset, tile_textures)
+
+                let rect = add_rect_padding(two_points_rect(v1, v2), pixel_to_meter(TILE_HEIGHT));
+                (rect, full_left_offset, tile_textures)
             })
             .collect();
         Self {

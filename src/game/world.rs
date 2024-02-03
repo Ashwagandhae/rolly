@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use crate::game::world::level::LevelId;
+use crate::game::world::{level::LevelId, update::camera_zoom};
 
-use self::level::{load_level, LevelInfo};
+use self::level::load_level;
 
 use hecs::World as HecsWorld;
 use macroquad::prelude::*;
@@ -13,7 +13,7 @@ pub mod floor;
 pub mod player;
 use player::Player;
 
-use super::assets::Assets;
+use super::{assets::Assets, ui::settings::Settings};
 pub mod collider;
 pub mod draw;
 pub mod frame;
@@ -26,16 +26,19 @@ pub mod update;
 pub struct World {
     pub player: Player,
     pub entities: HecsWorld,
-    pub camera_target: Vec2,
+    pub camera: Camera2D,
     pub physics_world: PhysicsWorld,
     pub levels: HashMap<LevelId, Vec2>,
 }
 
 impl World {
-    pub fn new(assets: &Assets) -> Self {
+    pub fn new(_settings: &Settings, assets: &Assets) -> Self {
         println!("Loading world...");
         let mut physics_world = PhysicsWorld::new();
-        let camera_target = vec2(0.0, 0.0);
+        let camera = Camera2D {
+            target: vec2(0.0, 3.0),
+            ..Default::default()
+        };
         let entities = HecsWorld::new();
 
         let player = Player::spawn(&mut physics_world);
@@ -45,7 +48,7 @@ impl World {
         let mut world = Self {
             player,
             entities,
-            camera_target,
+            camera,
             physics_world,
             levels,
         };

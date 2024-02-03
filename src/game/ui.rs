@@ -128,7 +128,7 @@ fn home(game: &mut Game) {
             game,
             ui,
             &[
-                ("new world", |game| {
+                ("new game", |game| {
                     new_world(game);
                     game.screen = Screen::Running;
                 }),
@@ -140,7 +140,7 @@ fn home(game: &mut Game) {
 }
 
 fn new_world(game: &mut Game) {
-    game.world = Some(World::new(&game.assets));
+    game.world = Some(World::new(&game.settings, &game.assets));
 }
 
 fn draw_label(ui: &mut Ui, setting: &Setting<impl SettingInfo>) {
