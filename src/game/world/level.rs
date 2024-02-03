@@ -1,178 +1,126 @@
-use std::f32::consts::PI;
-
-use crate::game::texture::TextureHolder;
-use crate::game::world::draw::pixel_to_meter;
-use crate::game::world::floor::Material;
-use crate::game::world::polygon::{vertices_to_clockwise, OrderedVec2};
-
-use super::floor::{spawn_floor, spawn_thing};
-use super::World;
-use indexmap::IndexSet;
 use macroquad::prelude::*;
-use xml::{
-    attribute::OwnedAttribute,
-    name::OwnedName,
-    namespace::Namespace,
-    reader::{EventReader, XmlEvent},
-};
 
-include!(concat!(env!("OUT_DIR"), "/level_codegen.rs"));
+use crate::game::assets::Assets;
+use crate::game::ui::settings::Settings;
+use crate::game::world::floor::Material;
+use crate::game::world::svg::{read_svg, SvgShape};
+use crate::game::world::thing::ThingInfo;
 
-type StartElementEvent = (OwnedName, Vec<OwnedAttribute>, Namespace);
-pub fn load_level(texture_holder: &TextureHolder, world: &mut World, level: usize) {
-    println!("Loading level {}", level);
-    let svg = LEVEL_SVGS[level];
-    let reader = EventReader::from_str(svg);
-    let mut floors: Vec<(Vec<Vec2>, Material)> = Vec::new();
-    let mut things: Vec<(Vec2, Vec2, f32, Material)> = Vec::new();
-    let mut svg_start_tag: Option<StartElementEvent> = None;
-    for e in reader {
-        match e {
-            Ok(XmlEvent::StartElement {
-                ref name,
-                ref attributes,
-                ref namespace,
-            }) => match name.local_name.as_str() {
-                "svg" => {
-                    svg_start_tag = Some((name.clone(), attributes.clone(), namespace.clone()));
-                }
-                "path" => {
-                    let vertices = path_to_vertices(
-                        svg_start_tag.clone().expect("no starting svg tag"),
-                        (name.clone(), attributes.clone(), namespace.clone()),
-                    );
-                    let kind = Material::from_hex_color(
-                        u32::from_str_radix(
-                            attributes
-                                .iter()
-                                .find(|a| a.name.local_name == "fill")
-                                .expect("no fill attribute")
-                                .value
-                                .trim_start_matches("#"),
-                            16,
-                        )
-                        .expect("fill attribute is not a hex color"),
-                    );
-                    floors.push((vertices, kind));
-                }
-                "rect" => {
-                    let (pos, dims, rotate) = svg_rect_to_rect(attributes);
-                    let kind = Material::from_hex_color(
-                        u32::from_str_radix(
-                            attributes
-                                .iter()
-                                .find(|a| a.name.local_name == "fill")
-                                .expect("no fill attribute")
-                                .value
-                                .trim_start_matches("#"),
-                            16,
-                        )
-                        .expect("fill attribute is not a hex color"),
-                    );
-                    things.push((pos, dims, rotate, kind));
-                }
-                _ => {}
-            },
-            Err(e) => {
-                panic!("Error: {}", e);
-            }
-            _ => {}
+use super::draw::{meter_to_pixel, pos_in_camera};
+use super::floor::spawn_floor;
+use super::thing::spawn_thing;
+use super::World;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct LevelId(pub usize);
+
+impl LevelId {
+    fn next(&self) -> Self {
+        LevelId(self.0 + 1)
+    }
+    fn prev(&self) -> Option<Self> {
+        if self.0 == 0 {
+            None
+        } else {
+            Some(LevelId(self.0 - 1))
         }
     }
+}
 
-    for (vertices, material) in floors {
-        spawn_floor(texture_holder, world, vertices, material);
-    }
-    for (pos, dims, rotate, material) in things {
-        spawn_thing(world, pos, dims, rotate, material);
+#[derive(Debug, Clone)]
+pub struct LevelInfo {
+    pub dims: Vec2,
+    pub markers: Markers,
+}
+
+#[derive(Debug, Clone)]
+pub struct Markers {
+    pub start: Vec2,
+    pub end: Vec2,
+    pub original_spawn: Option<Vec2>,
+}
+
+impl std::default::Default for Markers {
+    fn default() -> Self {
+        Self {
+            start: vec2(0.0, 0.0),
+            end: vec2(0.0, 0.0),
+            original_spawn: None,
+        }
     }
 }
 
-pub fn svg_rect_to_rect(attributes: &[OwnedAttribute]) -> (Vec2, Vec2, f32) {
-    let get_attr = |name: &str| {
-        &attributes
-            .iter()
-            .find(|a| a.name.local_name == name)
-            .expect(&format! {"no {} attribute", name})
-            .value
-    };
-    let parse_attr = |name: &str| {
-        get_attr(name)
-            .parse::<f32>()
-            .expect(&format! {"attribute {} is not a number", name})
-    };
-    let x = parse_attr("x");
-    let y = parse_attr("y");
-    let width = parse_attr("width");
-    let height = parse_attr("height");
-    let rotate = {
-        let rotate = get_attr("transform");
-        let rotate = rotate.trim_start_matches("rotate(");
-        let rotate = rotate.trim_end_matches(")");
-        let (rotate, _) = rotate
-            .split_once(" ")
-            .expect("no space in rotate attribute");
-        let rotate = rotate
-            .parse::<f32>()
-            .expect("rotate attribute is not a number");
-        ((rotate / 360.0) * 2.0 * PI).rem_euclid(2.0 * PI)
-    };
-    let pos = Vec2::new(x, y);
-    let translate_1 = Vec2::new(rotate.cos(), rotate.sin()) * (width / 2.0);
-    let translate_2 =
-        Vec2::new(rotate.cos(), rotate.sin()).rotate(Vec2::new(0.0, 1.0)) * (height / 2.0);
-    let pos = pos + translate_1 + translate_2;
-    (
-        pixel_to_meter(pos),
-        pixel_to_meter(Vec2::new(width, height) * 0.5),
-        rotate,
-    )
+impl LevelInfo {
+    pub fn parse(svg: &str) -> Self {
+        let mut markers = Markers::default();
+        let (size, items) = read_svg(svg);
+        for item in items {
+            match item.shape {
+                SvgShape::Circle(circle) => {
+                    let radius: usize = meter_to_pixel(circle.r).round() as usize;
+                    if radius != 50 {
+                        continue;
+                    }
+                    match item.color {
+                        0x0000FF => markers.original_spawn = Some(circle.pos),
+                        0x00FF00 => markers.start = circle.pos,
+                        0xFF0000 => markers.end = circle.pos,
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+        Self {
+            dims: size,
+            markers,
+        }
+    }
 }
 
-use svg2polylines;
-use xml::writer::{EmitterConfig, EventWriter};
-pub fn path_to_vertices(
-    svg_start_tag: StartElementEvent,
-    path_start_tag: StartElementEvent,
-) -> Vec<Vec2> {
-    fn start_end_element(
-        name: OwnedName,
-        attributes: Vec<OwnedAttribute>,
-        namespace: Namespace,
-    ) -> (XmlEvent, XmlEvent) {
-        let start = XmlEvent::StartElement {
-            name: name.clone(),
-            attributes,
-            namespace,
+pub fn load_level(assets: &Assets, world: &mut World, level: LevelId, pos: Vec2) {
+    let (_, svg) = &assets.levels[&level.0];
+    let (_, items) = read_svg(svg);
+    for item in items {
+        match item.shape {
+            SvgShape::Rect(rect) => {
+                let thing_info = ThingInfo::new_rect(rect.pos, rect.rotate, rect.dims, item.color);
+                spawn_thing(assets, world, thing_info, level, pos);
+            }
+            SvgShape::Circle(circle) => {
+                let thing_info =
+                    ThingInfo::new_circle(circle.pos, circle.rotate, circle.r, item.color);
+                spawn_thing(assets, world, thing_info, level, pos);
+            }
+            SvgShape::Path(path) => {
+                let material = Material::from_hex_color(item.color);
+                spawn_floor(assets, world, path.vertices, material, level, pos);
+            }
+        }
+    }
+    world.levels.insert(level, pos);
+}
+
+pub fn update_loaded_levels(assets: &Assets, settings: &Settings, world: &mut World) {
+    for (level, pos) in world.levels.clone() {
+        load_adjacent_levels(assets, settings, world, level, pos);
+    }
+}
+
+fn load_adjacent_levels(
+    assets: &Assets,
+    settings: &Settings,
+    world: &mut World,
+    level: LevelId,
+    pos: Vec2,
+) {
+    let (info, _) = &assets.levels[&level.0];
+    let (next_level, end_pos) = (level.next(), info.markers.end);
+    if !world.levels.contains_key(&next_level) && pos_in_camera(settings, world, pos + end_pos) {
+        let Some((new_info, _)) = &assets.levels.get(&next_level.0) else {
+            return;
         };
-        let end = XmlEvent::EndElement { name };
-        (start, end)
+        let new_pos = dbg!(pos) + dbg!(info.markers.end) - dbg!(new_info.markers.start);
+        load_level(assets, world, next_level, new_pos);
     }
-    let mut output = Vec::new();
-    let mut writer = EventWriter::new_with_config(&mut output, EmitterConfig::default());
-
-    let (svg_start, svg_end) = start_end_element(svg_start_tag.0, svg_start_tag.1, svg_start_tag.2);
-    let (path_start, path_end) =
-        start_end_element(path_start_tag.0, path_start_tag.1, path_start_tag.2);
-
-    writer.write(svg_start.as_writer_event().unwrap()).unwrap();
-    writer.write(path_start.as_writer_event().unwrap()).unwrap();
-    writer.write(path_end.as_writer_event().unwrap()).unwrap();
-    writer.write(svg_end.as_writer_event().unwrap()).unwrap();
-
-    let svg = String::from_utf8(output).unwrap();
-
-    let polylines = svg2polylines::parse(&svg, 15.0, true).unwrap();
-
-    assert_eq!(polylines.len(), 1);
-
-    let polyline = &polylines[0];
-    let vertices: Vec<Vec2> = polyline
-        .iter()
-        .map(|p| vec2(p.x as f32, p.y as f32))
-        .map(pixel_to_meter)
-        .collect();
-    let vertices_set: IndexSet<OrderedVec2> = vertices.iter().map(|&v| v.into()).collect();
-    let vertices = vertices_set.into_iter().map(|v| v.into()).collect();
-    vertices_to_clockwise(vertices)
 }

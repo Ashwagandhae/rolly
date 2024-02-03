@@ -1,14 +1,14 @@
-pub mod texture;
+pub mod assets;
 pub mod ui;
 pub mod world;
 
-use self::{texture::TextureHolder, ui::settings::Settings};
+use self::{assets::Assets, ui::settings::Settings};
 use macroquad::prelude::*;
 
 use world::{draw::draw as draw_world, update::update as update_world, World};
 
 pub struct Game {
-    pub texture_holder: TextureHolder,
+    pub assets: Assets,
     pub settings: Settings,
     pub screen: Screen,
     pub world: Option<World>,
@@ -19,7 +19,7 @@ impl Game {
         let settings = Settings::new();
         ui::init(&settings);
         Self {
-            texture_holder: TextureHolder::new().await,
+            assets: Assets::new().await,
             settings: Settings::new(),
             screen: Screen::Home,
             world: None,
@@ -36,9 +36,9 @@ impl Game {
 
 pub fn tick(game: &mut Game) {
     if let Some(world) = &mut game.world {
-        draw_world(&game.settings, &game.texture_holder, world);
+        draw_world(&game.settings, &game.assets, world);
         if let Screen::Running = game.screen {
-            update_world(&game.settings, world);
+            update_world(&game.assets, &game.settings, world);
         }
     }
     // if requested to quit, save world

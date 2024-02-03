@@ -1,31 +1,40 @@
 use std::f32::consts::PI;
 
-use super::super::floor::{ThingDraw, VertexDraw};
+use super::super::floor::VertexDraw;
 use super::super::polygon::{shrink_polygon, trimesh_indices_from_polygon};
 use super::{draw_texture_centered, draw_trimesh, pixel_to_meter};
 use crate::consts::*;
-use crate::game::texture::{TextureHolder, TileConstraints};
+use crate::game::assets::{Assets, TileConstraints};
+use crate::game::world::thing::ThingDraw;
 use crate::game::world::World;
+use hecs::Or;
 use itertools::Itertools;
 use macroquad::prelude::*;
+use rapier2d::dynamics::RigidBodyHandle;
 
-pub fn draw(texture_holder: &TextureHolder, world: &World) {
-    for (_, draw) in world.entities.query::<&VertexDraw>().iter() {
-        match draw {
-            VertexDraw::Tiled(tiled_draw) => {
-                draw_tiled(texture_holder, tiled_draw);
-            }
-            VertexDraw::Liquid(liquid_draw) => {
-                draw_liquid(liquid_draw);
+pub fn draw(assets: &Assets, world: &World) {
+    for (_, (draw, body)) in world
+        .entities
+        .query::<(Or<&VertexDraw, &ThingDraw>, &RigidBodyHandle)>()
+        .iter()
+    {
+        if let Or::Left(vertex_draw) | Or::Both(vertex_draw, _) = draw {
+            match vertex_draw {
+                VertexDraw::Tiled(tiled_draw) => {
+                    draw_tiled(assets, tiled_draw);
+                }
+                VertexDraw::Liquid(liquid_draw) => {
+                    draw_liquid(liquid_draw);
+                }
             }
         }
-    }
-    for (_, draw) in world.entities.query::<&ThingDraw>().iter() {
-        draw_thing(texture_holder, draw);
+        if let Or::Right(thing_draw) | Or::Both(_, thing_draw) = draw {
+            draw_thing(assets, world, thing_draw, body);
+        }
     }
 }
 
-pub fn draw_tiled(texture_holder: &TextureHolder, tiled_draw: &TiledDraw) {
+pub fn draw_tiled(assets: &Assets, tiled_draw: &TiledDraw) {
     for ((vertices, indices), color) in tiled_draw.trimeshes.iter().zip(tiled_draw.colors.iter()) {
         draw_trimesh(vertices, indices, *color)
     }
@@ -41,7 +50,7 @@ pub fn draw_tiled(texture_holder: &TextureHolder, tiled_draw: &TiledDraw) {
             let down = Vec2::from_angle(rotation_down) * pixel_to_meter(TILE_DOWN);
             let pos = v1 + (v2 - v1).normalize() * dist + down;
 
-            draw_texture_centered(texture_holder, texture_file, pos, rotation, None);
+            draw_texture_centered(assets, texture_file, pos, rotation, None);
         };
         for (j, texture_file) in textures.iter().rev().enumerate() {
             let dist = j as f32 * pixel_to_meter(TILE_WIDTH)
@@ -73,12 +82,7 @@ pub struct TiledDraw {
 }
 
 impl TiledDraw {
-    pub fn new(
-        texture_holder: &TextureHolder,
-        tile: &'static str,
-        colors: [Color; 3],
-        vertices: &[Vec2],
-    ) -> Self {
+    pub fn new(assets: &Assets, tile: &'static str, colors: [Color; 3], vertices: &[Vec2]) -> Self {
         let shrink_1 = shrink_polygon(&vertices, pixel_to_meter(40.0));
         let shrink_2 = shrink_polygon(&shrink_1, pixel_to_meter(40.0));
         let map = |vertices: Vec<Vec2>| {
@@ -108,7 +112,7 @@ impl TiledDraw {
 
                 let full_left_offset = left_offset
                     + (distance_offset - count as f32 * pixel_to_meter(TILE_WIDTH)) / 2.0;
-                let tile_textures = generate_textures_from_tile(texture_holder, tile, v1.x, count)
+                let tile_textures = generate_textures_from_tile(assets, tile, v1.x, count)
                     .into_iter()
                     .map(|s| s.to_string())
                     .collect();
@@ -125,12 +129,12 @@ impl TiledDraw {
 }
 
 pub fn generate_textures_from_tile<'a>(
-    texture_holder: &'a TextureHolder,
+    assets: &'a Assets,
     tile: &str,
     seed: f32,
     count: usize,
 ) -> Vec<&'a str> {
-    let tile = &texture_holder.tiles[tile];
+    let tile = &assets.tiles[tile];
     rand::srand(seed.to_bits() as u64);
     let mut last_constraints = TileConstraints::zero();
     let mut textures = Vec::new();
@@ -177,14 +181,9 @@ pub fn draw_liquid(liquid_draw: &LiquidDraw) {
     );
 }
 
-pub fn draw_thing(texture_holder: &TextureHolder, thing_draw: &ThingDraw) {
-    let pos = thing_draw.pos;
-    let rotate = thing_draw.rotate;
-    draw_texture_centered(
-        texture_holder,
-        thing_draw.texture.as_str(),
-        pos,
-        rotate,
-        None,
-    );
+pub fn draw_thing(assets: &Assets, world: &World, thing_draw: &ThingDraw, body: &RigidBodyHandle) {
+    let body = world.physics_world.get_body(*body).unwrap();
+    let pos = body.position().translation.vector.into();
+    let rotate = body.position().rotation.angle();
+    draw_texture_centered(assets, thing_draw.texture.as_str(), pos, rotate, None);
 }

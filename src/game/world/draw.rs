@@ -1,6 +1,6 @@
 use crate::{
     consts::*,
-    game::{texture::TextureHolder, Settings},
+    game::{assets::Assets, Settings},
 };
 
 use super::World;
@@ -9,7 +9,7 @@ use macroquad::prelude::*;
 pub mod floor;
 pub mod player;
 
-pub fn draw(settings: &Settings, texture_holder: &TextureHolder, world: &World) {
+pub fn draw(settings: &Settings, assets: &Assets, world: &World) {
     set_camera(&Camera2D {
         // zoom: camera_zoom(world), — works in macroquad 0.4.*
         // need to use this to make it work in 0.3.*, to address screen flipping bug
@@ -20,9 +20,9 @@ pub fn draw(settings: &Settings, texture_holder: &TextureHolder, world: &World) 
         target: world.camera_target,
         ..Default::default()
     });
-    draw_back(settings, texture_holder, world);
-    player::draw(texture_holder, world);
-    floor::draw(texture_holder, world);
+    draw_back(settings, assets, world);
+    player::draw(assets, world);
+    floor::draw(assets, world);
 }
 
 pub fn camera_zoom(settings: &Settings, _world: &World) -> Vec2 {
@@ -33,13 +33,13 @@ pub fn camera_zoom(settings: &Settings, _world: &World) -> Vec2 {
 }
 
 pub fn draw_texture_centered(
-    texture_holder: &TextureHolder,
+    assets: &Assets,
     texture_file: &str,
     pos: Vec2,
     rotation: f32,
     params: Option<DrawTextureParams>,
 ) {
-    let (size, texture) = &texture_holder[texture_file];
+    let (size, texture) = &assets[texture_file];
     let size = Vec2::new(pixel_to_meter(size.0 as f32), pixel_to_meter(size.1 as f32));
     draw_texture_ex(
         *texture,
@@ -111,24 +111,24 @@ fn draw_trimesh(vertices: &[Vec2], indices: &[[u32; 3]], color: Color) {
     }
 }
 
-fn draw_back(settings: &Settings, texture_holder: &TextureHolder, world: &World) {
+fn draw_back(settings: &Settings, assets: &Assets, world: &World) {
     let back_items: &[((Option<&str>, _, Option<&str>), f32)] = &[
         ((Some("sky_up"), "sky", None), 0.2),
         ((None, "hills", Some("hills_down")), 0.4),
     ];
     for &((up_texture, texture, down_texture), zoom) in back_items {
         let size = {
-            let size = texture_holder[texture].0;
+            let size = assets[texture].0;
             vec2(pixel_to_meter(size.0 as f32), pixel_to_meter(size.1 as f32))
         };
         let y = parallax(zoom, 3.0, world.camera_target.y);
         for x in tiled_parallax_x(settings, world, zoom, size.x, 0.0) {
             let pos = Vec2::new(x, y);
-            draw_texture_centered(texture_holder, texture, pos, 0.0, None);
+            draw_texture_centered(assets, texture, pos, 0.0, None);
         }
         if let Some(up_texture) = up_texture {
             let size_up = {
-                let size = texture_holder[up_texture].0;
+                let size = assets[up_texture].0;
                 vec2(pixel_to_meter(size.0 as f32), pixel_to_meter(size.1 as f32))
             };
             for y_up in tiled_parallax_y(settings, world, zoom, size_up.y, 0.0) {
@@ -137,13 +137,13 @@ fn draw_back(settings: &Settings, texture_holder: &TextureHolder, world: &World)
                 }
                 for x_up in tiled_parallax_x(settings, world, zoom, size_up.x, 0.0) {
                     let pos = Vec2::new(x_up, y_up);
-                    draw_texture_centered(texture_holder, up_texture, pos, 0.0, None);
+                    draw_texture_centered(assets, up_texture, pos, 0.0, None);
                 }
             }
         }
         if let Some(down_texture) = down_texture {
             let size_down = {
-                let size = texture_holder[down_texture].0;
+                let size = assets[down_texture].0;
                 vec2(pixel_to_meter(size.0 as f32), pixel_to_meter(size.1 as f32))
             };
             for y_down in
@@ -154,7 +154,7 @@ fn draw_back(settings: &Settings, texture_holder: &TextureHolder, world: &World)
                 }
                 for x_down in tiled_parallax_x(settings, world, zoom, size_down.x, 0.0) {
                     let pos = Vec2::new(x_down, y_down);
-                    draw_texture_centered(texture_holder, down_texture, pos, 0.0, None);
+                    draw_texture_centered(assets, down_texture, pos, 0.0, None);
                 }
             }
         }
@@ -217,4 +217,16 @@ fn tiled_parallax(
 
 fn parallax(zoom: f32, pos: f32, camera_target: f32) -> f32 {
     pos + (camera_target - pos) * (1.0 - zoom)
+}
+
+
+pub fn pos_in_camera(settings: &Settings, world: &World, pos: Vec2) -> bool {
+    let camera_zoom = camera_zoom(settings, world);
+    let camera_target = world.camera_target;
+    let camera_start = camera_target - vec2(1.0, screen_height() / screen_width()) / camera_zoom;
+    let camera_end = camera_target + vec2(1.0, screen_height() / screen_width()) / camera_zoom;
+    pos.x >= camera_start.x
+        && pos.x <= camera_end.x
+        && pos.y >= camera_start.y
+        && pos.y <= camera_end.y
 }

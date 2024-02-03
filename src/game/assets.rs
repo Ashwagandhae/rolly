@@ -1,17 +1,20 @@
 use macroquad::prelude::*;
 use std::{collections::HashMap, ops::RangeInclusive};
 
+use super::world::level::LevelInfo;
+
 type SizedTexture = ((usize, usize), Texture2D);
-pub struct TextureHolder {
+pub struct Assets {
     pub textures: HashMap<String, SizedTexture>,
     pub tiles: HashMap<String, Tile>,
+    pub colliders: HashMap<String, String>,
+    pub levels: HashMap<usize, (LevelInfo, String)>,
 }
 
-include!(concat!(env!("OUT_DIR"), "/texture_codegen.rs"));
+include!(concat!(env!("OUT_DIR"), "/asset_codegen.rs"));
 
-impl TextureHolder {
+impl Assets {
     pub async fn new() -> Self {
-        println!("Loading textures...");
         let texture_paths = TEXTURE_FILENAMES
             .iter()
             .map(|(filename, _)| format!("assets/textures/{}", filename))
@@ -34,19 +37,65 @@ impl TextureHolder {
             })
             .collect::<Vec<_>>();
         let tiles = extract_tiles(&texture_name_and_args);
-        let texture_map = texture_name_and_args
+        let textures = texture_name_and_args
             .iter()
             .zip(textures)
             .map(|((name, size, _), texture)| (name.to_string(), (*size, texture)))
             .collect::<HashMap<_, _>>();
+
+        let collider_paths = COLLIDER_FILENAMES
+            .iter()
+            .map(|filename| format!("assets/colliders/{}", filename))
+            .collect::<Vec<_>>();
+        let mut colliders_load = Vec::new();
+        for filename in collider_paths {
+            colliders_load.push(load_string(&filename).await);
+        }
+        let colliders = COLLIDER_FILENAMES
+            .iter()
+            .map(|filename| {
+                let filename = filename.strip_suffix(".svg").expect("expected svg file");
+                let (name, _) = split_name_args(filename);
+                name.to_string()
+            })
+            .zip(colliders_load.into_iter().map(|collider| collider.unwrap()))
+            .collect::<HashMap<_, _>>();
+
+        let level_paths = LEVEL_FILENAMES
+            .iter()
+            .map(|filename| format!("assets/levels/{}", filename))
+            .collect::<Vec<_>>();
+        let mut levels_load = Vec::new();
+        for filename in level_paths {
+            levels_load.push(load_string(&filename).await);
+        }
+        let levels = LEVEL_FILENAMES
+            .iter()
+            .map(|filename| {
+                let filename = filename.strip_suffix(".svg").expect("expected svg file");
+                let (name, _) = split_name_args(filename);
+                name.parse().unwrap()
+            })
+            .zip(
+                levels_load
+                    .into_iter()
+                    .map(|level| level.unwrap())
+                    .map(|level| {
+                        let level_info = LevelInfo::parse(&level);
+                        (level_info, level)
+                    }),
+            )
+            .collect::<HashMap<_, _>>();
         Self {
-            textures: texture_map,
+            textures,
             tiles,
+            colliders,
+            levels,
         }
     }
 }
 
-impl TextureHolder {
+impl Assets {
     pub fn get(&self, index: &str) -> Option<&SizedTexture> {
         self.textures.get(index)
     }
@@ -55,7 +104,7 @@ impl TextureHolder {
     }
 }
 
-impl std::ops::Index<&str> for TextureHolder {
+impl std::ops::Index<&str> for Assets {
     type Output = SizedTexture;
 
     fn index(&self, index: &str) -> &Self::Output {
@@ -63,7 +112,7 @@ impl std::ops::Index<&str> for TextureHolder {
     }
 }
 
-impl std::ops::IndexMut<&str> for TextureHolder {
+impl std::ops::IndexMut<&str> for Assets {
     fn index_mut(&mut self, index: &str) -> &mut Self::Output {
         self.textures.get_mut(index).unwrap()
     }
@@ -96,20 +145,6 @@ pub fn extract_tiles(
         );
     tiles
 }
-
-// pub fn name_and_constraints(name: &str) -> (String, TileConstraints) {
-//     let name = name.split(['_', '(']).next().unwrap().to_string();
-//     let constraints = name
-//         .split_once('(')
-//         .map(|(_, constraints)| {
-//             let constraints = constraints
-//                 .strip_suffix(')')
-//                 .unwrap_or("expected end parantheses");
-//             TileConstraints::parse(constraints)
-//         })
-//         .unwrap_or_default();
-//     (name, constraints)
-// }
 
 pub fn split_name_args(name: &str) -> (&str, Option<&str>) {
     name.split_once('(')

@@ -1,8 +1,9 @@
 use super::draw::floor::{LiquidDraw, TiledDraw};
+use super::level::LevelId;
 use super::polygon::trimesh_indices_from_polygon;
 use super::World;
 use crate::consts::*;
-use crate::game::texture::TextureHolder;
+use crate::game::assets::Assets;
 use macroquad::prelude::*;
 use rapier2d::prelude::*;
 
@@ -34,10 +35,10 @@ impl Material {
             _ => panic!("unknown floor color: {:x}", hex_color),
         }
     }
-    pub fn to_vertex_draw(self, texture_holder: &TextureHolder, vertices: &[Vec2]) -> VertexDraw {
+    pub fn to_vertex_draw(self, assets: &Assets, vertices: &[Vec2]) -> VertexDraw {
         match self {
             Self::Grass => VertexDraw::Tiled(TiledDraw::new(
-                texture_holder,
+                assets,
                 "grass",
                 [
                     Color::from_hex(0x8BB661),
@@ -47,7 +48,7 @@ impl Material {
                 vertices,
             )),
             Self::Stone => VertexDraw::Tiled(TiledDraw::new(
-                texture_holder,
+                assets,
                 "stone",
                 [
                     Color::from_hex(0x667696),
@@ -57,7 +58,7 @@ impl Material {
                 vertices,
             )),
             Self::Mud => VertexDraw::Tiled(TiledDraw::new(
-                texture_holder,
+                assets,
                 "mud",
                 [
                     Color::from_hex(0x775444),
@@ -81,11 +82,14 @@ pub enum VertexDraw {
 }
 
 pub fn spawn_floor(
-    texture_holder: &TextureHolder,
+    assets: &Assets,
     world: &mut World,
     vertices: Vec<Vec2>,
     material: Material,
+    level: LevelId,
+    pos: Vec2,
 ) {
+    let vertices = vertices.iter().map(|v| *v + pos).collect::<Vec<_>>();
     let trimesh_indices = trimesh_indices_from_polygon(&vertices);
     let builder = {
         let vertices = vertices.iter().map(|&v| v.into()).collect::<Vec<_>>();
@@ -93,48 +97,16 @@ pub fn spawn_floor(
             .friction(PLATFORM_FRICTION)
             .friction_combine_rule(CoefficientCombineRule::Max)
     };
-    let vertex_draw = material.to_vertex_draw(texture_holder, &vertices);
+    let vertex_draw = material.to_vertex_draw(assets, &vertices);
 
-    let (_, collider_handle) = world.physics_world.add_body(
+    let (body_handle, collider_handle) = world.physics_world.add_body(
         RigidBodyBuilder::fixed()
-            .translation(Vec2::new(0.0, 0.0).into())
+            .translation(Vec2::ZERO.into())
             .build(),
         builder.sensor(!material.rigid()).build(),
     );
 
     world
         .entities
-        .spawn((collider_handle, vertex_draw, material));
-}
-
-#[derive(Debug, Clone)]
-pub struct ThingDraw {
-    pub texture: String,
-    pub pos: Vec2,
-    pub dims: Vec2,
-    pub rotate: f32,
-}
-
-pub fn spawn_thing(world: &mut World, pos: Vec2, dims: Vec2, rotate: f32, material: Material) {
-    let (_, collider_handle) = world.physics_world.add_body(
-        RigidBodyBuilder::fixed()
-            .translation(pos.into())
-            .rotation(rotate)
-            .build(),
-        ColliderBuilder::cuboid(dims.x, dims.y)
-            .friction(PLATFORM_FRICTION)
-            .friction_combine_rule(CoefficientCombineRule::Max)
-            .sensor(!material.rigid())
-            .build(),
-    );
-    world.entities.spawn((
-        collider_handle,
-        ThingDraw {
-            texture: "stone".to_owned(),
-            pos,
-            dims,
-            rotate,
-        },
-        material,
-    ));
+        .spawn((body_handle, collider_handle, vertex_draw, material, level));
 }

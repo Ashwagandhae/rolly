@@ -140,7 +140,7 @@ fn home(game: &mut Game) {
 }
 
 fn new_world(game: &mut Game) {
-    game.world = Some(World::new(&game.texture_holder));
+    game.world = Some(World::new(&game.assets));
 }
 
 fn draw_label(ui: &mut Ui, setting: &Setting<impl SettingInfo>) {
@@ -322,7 +322,7 @@ fn running(game: &mut Game) {
 fn quit(_game: &mut Game) {}
 
 // pub struct Game {
-//     texture_holder: TextureHolder,
+//     assets: Assets,
 //     storage: Storage {
 //         settings: Settings {
 //             volume: f32,

@@ -1,16 +1,19 @@
 use super::floor::Material;
+use super::level::update_loaded_levels;
 use super::player::{Body, Polly, Rolly};
 
 use super::World;
 use crate::consts::*;
+use crate::game::assets::Assets;
 use crate::game::Settings;
 use macroquad::prelude::*;
 use nalgebra::UnitComplex;
 use rapier2d::prelude::*;
 
-pub fn update(settings: &Settings, world: &mut World) {
+pub fn update(assets: &Assets, settings: &Settings, world: &mut World) {
     update_camera(settings, world);
 
+    update_loaded_levels(assets, settings, world);
     world.physics_world.update();
 
     player_body(world);

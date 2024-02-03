@@ -3,11 +3,11 @@ use std::f32::consts::PI;
 use super::super::player::{Body, Polly, Transition};
 use super::lerp;
 use super::{draw_texture_centered, pixel_to_meter};
-use crate::game::texture::TextureHolder;
+use crate::game::assets::Assets;
 use crate::game::world::World;
 use macroquad::prelude::*;
 
-pub fn draw(texture_holder: &TextureHolder, world: &World) {
+pub fn draw(assets: &Assets, world: &World) {
     let player = world
         .physics_world
         .get_body(world.player.body.any_body_handle())
@@ -17,16 +17,16 @@ pub fn draw(texture_holder: &TextureHolder, world: &World) {
 
     match world.player.rolly_polly_transition {
         Transition::Between { time, .. } => {
-            draw_olly(texture_holder, world, pos, rotation, time);
+            draw_olly(assets, world, pos, rotation, time);
         }
         _ => match world.player.body {
-            Body::Rolly(_) => draw_rolly(texture_holder, world, pos, rotation),
-            Body::Polly(ref polly) => draw_polly(texture_holder, world, polly, pos, rotation),
+            Body::Rolly(_) => draw_rolly(assets, world, pos, rotation),
+            Body::Polly(ref polly) => draw_polly(assets, world, polly, pos, rotation),
         },
     };
 }
 
-fn draw_olly(texture_holder: &TextureHolder, world: &World, pos: Vec2, rotation: f32, time: f32) {
+fn draw_olly(assets: &Assets, world: &World, pos: Vec2, rotation: f32, time: f32) {
     let eye_x = world.player.eye_x.get();
     let parts = &[
         ("olly-big-back", vec2(0.0, 0.0), vec2(0.0, -10.0), 0.0, 0.0),
@@ -60,7 +60,7 @@ fn draw_olly(texture_holder: &TextureHolder, world: &World, pos: Vec2, rotation:
         let rotate_offset = lerp(*rotate_offset_start, *rotate_offset_end, eased);
 
         draw_texture_centered(
-            texture_holder,
+            assets,
             filename,
             pos + offset,
             rotation + rotate_offset,
@@ -72,14 +72,8 @@ fn draw_olly(texture_holder: &TextureHolder, world: &World, pos: Vec2, rotation:
     }
 }
 
-fn draw_polly(
-    texture_holder: &TextureHolder,
-    world: &World,
-    polly: &Polly,
-    pos: Vec2,
-    rotation: f32,
-) {
-    draw_feet(texture_holder, world, polly, pos, rotation);
+fn draw_polly(assets: &Assets, world: &World, polly: &Polly, pos: Vec2, rotation: f32) {
+    draw_feet(assets, world, polly, pos, rotation);
 
     let velocity = world
         .physics_world
@@ -94,9 +88,9 @@ fn draw_polly(
         rotation
     };
 
-    draw_texture_centered(texture_holder, "polly", pos, rotation, None);
+    draw_texture_centered(assets, "polly", pos, rotation, None);
     draw_texture_centered(
-        texture_holder,
+        assets,
         "olly-eye",
         pos + pixel_to_meter(vec2(50.0 * world.player.eye_x.get(), 15.0)),
         rotation,
@@ -107,10 +101,10 @@ fn draw_polly(
     );
 }
 
-fn draw_rolly(texture_holder: &TextureHolder, world: &World, pos: Vec2, rotation: f32) {
-    draw_texture_centered(texture_holder, "rolly", pos, rotation, None);
+fn draw_rolly(assets: &Assets, world: &World, pos: Vec2, rotation: f32) {
+    draw_texture_centered(assets, "rolly", pos, rotation, None);
     draw_texture_centered(
-        texture_holder,
+        assets,
         "olly-eye",
         pos + pixel_to_meter(vec2(15.0 * world.player.eye_x.get(), 35.0)),
         rotation,
@@ -121,16 +115,10 @@ fn draw_rolly(texture_holder: &TextureHolder, world: &World, pos: Vec2, rotation
     );
 }
 
-fn draw_feet(
-    texture_holder: &TextureHolder,
-    _world: &World,
-    polly: &Polly,
-    pos: Vec2,
-    rotation: f32,
-) {
+fn draw_feet(assets: &Assets, _world: &World, polly: &Polly, pos: Vec2, rotation: f32) {
     let draw_foot = |offset: Vec2| {
         draw_texture_centered(
-            texture_holder,
+            assets,
             "polly-foot",
             pos + offset,
             rotation,
