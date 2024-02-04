@@ -8,8 +8,7 @@ use crate::game::world::thing::ThingInfo;
 
 use super::draw::{get_camera_rect, meter_to_pixel, pos_in_camera};
 use super::floor::spawn_floor;
-use super::frame::Transition;
-use super::life_state::LifeState;
+
 use super::thing::spawn_thing;
 use super::World;
 

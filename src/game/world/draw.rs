@@ -3,7 +3,7 @@ use crate::{
     game::{assets::Assets, Settings},
 };
 
-use super::{life_state::LifeState, World};
+use super::{life_state::LifeState, polygon::three_points_rect, World};
 use macroquad::prelude::*;
 
 pub mod floor;
@@ -37,6 +37,24 @@ pub fn draw_texture_centered(
             ..params.unwrap_or_default()
         },
     );
+}
+
+pub fn draw_texture_centered_lazy(
+    world: &World,
+    assets: &Assets,
+    texture_file: &str,
+    pos: Vec2,
+    rotation: f32,
+    params: Option<DrawTextureParams>,
+) {
+    let (size, _) = &assets[texture_file];
+    let size =
+        Vec2::new(pixel_to_meter(size.0 as f32), pixel_to_meter(size.1 as f32)) * 2.0f32.sqrt();
+    let rect = Rect::new(pos.x - size.x / 2.0, pos.y - size.y / 2.0, size.x, size.y);
+    if !get_camera_rect(world).overlaps(&rect) {
+        return;
+    }
+    draw_texture_centered(assets, texture_file, pos, rotation, params);
 }
 
 pub fn get_camera_zoom(world: &World) -> Vec2 {
@@ -92,14 +110,17 @@ fn draw_irregular_polygon(vertices: &[Vec2], color: Color) {
     }
 }
 
-fn draw_trimesh(vertices: &[Vec2], indices: &[[u32; 3]], color: Color) {
+fn draw_trimesh_lazy(world: &World, vertices: &[Vec2], indices: &[[u32; 3]], color: Color) {
     for [v1, v2, v3] in indices {
-        draw_triangle(
+        let [v1, v2, v3] = [
             vertices[*v1 as usize],
             vertices[*v2 as usize],
             vertices[*v3 as usize],
-            color,
-        );
+        ];
+        if !get_camera_rect(world).overlaps(&three_points_rect(v1, v2, v3)) {
+            continue;
+        }
+        draw_triangle(v1, v2, v3, color);
     }
 }
 
@@ -150,17 +171,6 @@ fn draw_back(_settings: &Settings, assets: &Assets, world: &World) {
         }
     }
 }
-
-// fn draw_sky(world: &World) {
-//     // don't ask how this works
-//     let zoom = 0.1;
-//     let camera_start_x = world.camera.target.x - 1.0 / world.camera.zoom.x;
-//     let camera_end_x = world.camera.target.x + 1.0 / world.camera.zoom.x;
-//     for x in tiled_parallax(zoom, pixel_to_meter(1600.0), camera_start_x, camera_end_x) {
-//         let pos = Vec2::new(x, world.camera.target.y);
-//         draw_texture_centered(world, "sky", pos, 0.0, None);
-//     }
-// }
 
 fn tiled_parallax_x(
     world: &World,

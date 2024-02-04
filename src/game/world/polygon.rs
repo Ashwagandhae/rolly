@@ -158,6 +158,12 @@ pub fn two_points_rect(v1: Vec2, v2: Vec2) -> Rect {
     Rect::new(start.x, start.y, end.x - start.x, end.y - start.y)
 }
 
+pub fn three_points_rect(v1: Vec2, v2: Vec2, v3: Vec2) -> Rect {
+    let start = vec2(v1.x.min(v2.x).min(v3.x), v1.y.min(v2.y).min(v3.y));
+    let end = vec2(v1.x.max(v2.x).max(v3.x), v1.y.max(v2.y).max(v3.y));
+    Rect::new(start.x, start.y, end.x - start.x, end.y - start.y)
+}
+
 pub fn add_rect_padding(rect: Rect, padding: f32) -> Rect {
     Rect::new(
         rect.x - padding,

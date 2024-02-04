@@ -2,7 +2,10 @@ use std::f32::consts::PI;
 
 use super::super::floor::VertexDraw;
 use super::super::polygon::{shrink_polygon, trimesh_indices_from_polygon};
-use super::{draw_texture_centered, draw_trimesh, get_camera_rect, pixel_to_meter};
+use super::{
+    draw_texture_centered, draw_texture_centered_lazy, draw_trimesh_lazy, get_camera_rect,
+    pixel_to_meter,
+};
 use crate::consts::*;
 use crate::game::assets::{Assets, TileConstraints};
 use crate::game::world::polygon::{
@@ -27,7 +30,7 @@ pub fn draw(assets: &Assets, world: &World) {
                     draw_tiled(assets, world, tiled_draw);
                 }
                 VertexDraw::Liquid(liquid_draw) => {
-                    draw_liquid(liquid_draw);
+                    draw_liquid(world, liquid_draw);
                 }
             }
         }
@@ -39,7 +42,7 @@ pub fn draw(assets: &Assets, world: &World) {
 
 pub fn draw_tiled(assets: &Assets, world: &World, tiled_draw: &TiledDraw) {
     for ((vertices, indices), color) in tiled_draw.trimeshes.iter().zip(tiled_draw.colors.iter()) {
-        draw_trimesh(vertices, indices, *color)
+        draw_trimesh_lazy(world, vertices, indices, *color)
     }
     let vertices = &tiled_draw.trimeshes[0].0;
     for ((_, &v1, &v2, _), (rect, left_offset, textures)) in vertices
@@ -56,7 +59,7 @@ pub fn draw_tiled(assets: &Assets, world: &World, tiled_draw: &TiledDraw) {
             let down = Vec2::from_angle(rotation_down) * pixel_to_meter(TILE_DOWN);
             let pos = v1 + (v2 - v1).normalize() * dist + down;
 
-            draw_texture_centered(assets, texture_file, pos, rotation, None);
+            draw_texture_centered_lazy(world, assets, texture_file, pos, rotation, None);
         };
         for (j, texture_file) in textures.iter().rev().enumerate() {
             let dist = j as f32 * pixel_to_meter(TILE_WIDTH)
@@ -183,8 +186,9 @@ pub fn generate_textures_from_tile<'a>(
     textures
 }
 
-pub fn draw_liquid(liquid_draw: &LiquidDraw) {
-    draw_trimesh(
+pub fn draw_liquid(world: &World, liquid_draw: &LiquidDraw) {
+    draw_trimesh_lazy(
+        world,
         &liquid_draw.trimesh.0,
         &liquid_draw.trimesh.1,
         liquid_draw.color,
@@ -195,5 +199,12 @@ pub fn draw_thing(assets: &Assets, world: &World, thing_draw: &ThingDraw, body: 
     let body = world.physics_world.get_body(*body).unwrap();
     let pos = body.position().translation.vector.into();
     let rotate = body.position().rotation.angle();
-    draw_texture_centered(assets, thing_draw.texture.as_str(), pos, rotate, None);
+    draw_texture_centered_lazy(
+        world,
+        assets,
+        thing_draw.texture.as_str(),
+        pos,
+        rotate,
+        None,
+    );
 }

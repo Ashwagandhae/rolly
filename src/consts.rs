@@ -24,3 +24,5 @@ pub const CCD_ENABLED: bool = true;
 pub const DEAD_ALIVE_TRANSITION_DURATION: f32 = 1.0;
 
 pub const RESPAWN_AQUIRE_RADIUS: f32 = 0.3;
+
+pub const LAZY_PLAYER_RECT: f32 = 0.1;

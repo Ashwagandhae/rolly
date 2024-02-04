@@ -391,12 +391,18 @@ fn update_lazy_collider(world: &mut World) {
         .query::<(&mut LazyCollider, Option<&ColliderHandle>)>()
         .iter()
     {
-        let overlaps = get_camera_rect(world).overlaps(&lazy_collider.rect);
+        let player_pos = get_player_body(world).position();
+        let player_rect = Rect {
+            x: player_pos.translation.vector.x - LAZY_PLAYER_RECT / 2.0,
+            y: player_pos.translation.vector.y - LAZY_PLAYER_RECT / 2.0,
+            w: LAZY_PLAYER_RECT,
+            h: LAZY_PLAYER_RECT,
+        };
+        let overlaps = player_rect.overlaps(&lazy_collider.rect);
         if let Some(handle) = handle {
             if !overlaps {
                 world.physics_world.remove_collider(*handle);
                 entities_remove_collider.push(entity);
-                // world.entities.remove_one::<ColliderHandle>(entity);
             }
         } else {
             if overlaps {
@@ -405,14 +411,13 @@ fn update_lazy_collider(world: &mut World) {
                     lazy_collider.body_handle,
                 );
                 entities_add_collider.push((entity, handle));
-                // world.entities.insert_one(entity, handle);
             }
         }
     }
     for entity in entities_remove_collider {
-        world.entities.remove_one::<ColliderHandle>(entity);
+        world.entities.remove_one::<ColliderHandle>(entity).unwrap();
     }
     for (entity, handle) in entities_add_collider {
-        world.entities.insert_one(entity, handle);
+        world.entities.insert_one(entity, handle).unwrap();
     }
 }

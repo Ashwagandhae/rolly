@@ -1,5 +1,3 @@
-use macroquad::prelude::*;
-
 use super::frame::Transition;
 
 #[derive(Debug, Clone)]

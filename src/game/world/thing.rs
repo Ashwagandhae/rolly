@@ -5,7 +5,11 @@ use macroquad::prelude::*;
 use rapier2d::prelude::*;
 
 use super::{
-    draw::meter_to_pixel, floor::Material, level::LevelId, physics_world::PhysicsWorld, World,
+    draw::meter_to_pixel,
+    floor::{LazyCollider, Material},
+    level::LevelId,
+    physics_world::PhysicsWorld,
+    World,
 };
 use crate::{
     consts::*,
@@ -78,7 +82,7 @@ pub fn thing_name_to_entity(
 #[derive(Clone)]
 pub enum ColliderRepr {
     File(String),
-    Raw(ColliderBuilder),
+    Raw(Rect, ColliderBuilder),
 }
 
 #[derive(Debug, Clone)]
@@ -101,11 +105,15 @@ impl UsizeShapeSize {
 #[derive(Clone)]
 pub struct BasicThingParams {
     pub collider: Option<ColliderRepr>,
+    pub lazy: bool,
 }
 
 impl std::default::Default for BasicThingParams {
     fn default() -> Self {
-        Self { collider: None }
+        Self {
+            collider: None,
+            lazy: true,
+        }
     }
 }
 
@@ -133,16 +141,17 @@ fn basic_thing_ex(
     material: Material,
     ex: BasicThingParams,
 ) -> EntityBuilder {
-    let collider = match ex
+    let (rect, collider) = match ex
         .collider
         .unwrap_or(ColliderRepr::File(texture.to_owned()))
     {
         ColliderRepr::File(collider_file) => collider::load_collider(assets, &collider_file),
-        ColliderRepr::Raw(builder) => builder,
-    }
-    .friction(PLATFORM_FRICTION)
-    .friction_combine_rule(CoefficientCombineRule::Max)
-    .sensor(!material.rigid());
+        ColliderRepr::Raw(rect, builder) => (rect, builder),
+    };
+    let collider = collider
+        .friction(PLATFORM_FRICTION)
+        .friction_combine_rule(CoefficientCombineRule::Max)
+        .sensor(!material.rigid());
 
     let body = RigidBodyBuilder::fixed()
         .translation(pos.into())
@@ -152,13 +161,22 @@ fn basic_thing_ex(
         .physics_world
         .add_body_and_collider(body.build(), collider.build());
 
-    EntityBuilder::new()
+    let mut builder = EntityBuilder::new()
         .add(body_handle)
         .add(collider_handle)
         .add(ThingDraw {
             texture: texture.to_owned(),
         })
-        .add(material)
+        .add(material);
+    let rect = Rect::new(pos.x - rect.w / 2.0, pos.y - rect.h / 2.0, rect.w, rect.h);
+    if ex.lazy {
+        builder = builder.add(LazyCollider {
+            rect,
+            builder: collider,
+            body_handle,
+        })
+    }
+    builder
 }
 fn basic_thing(
     assets: &Assets,
