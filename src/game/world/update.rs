@@ -324,7 +324,7 @@ fn load_respawn(assets: &Assets, world: &mut World) {
     for (level, _) in world.levels.clone() {
         unload_level(world, level)
     }
-    load_level(assets, world, world.player.respawn, vec2(0.0, 0.0));
+    load_level(assets, world, world.player.respawn);
 
     let (pos, _) = find_respawn(world, world.player.respawn);
     world.camera.target = pos;

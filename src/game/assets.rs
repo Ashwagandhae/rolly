@@ -1,5 +1,6 @@
 use macroquad::prelude::*;
-use std::{collections::HashMap, ops::RangeInclusive};
+use rustc_hash::FxHashMap as HashMap;
+use std::ops::RangeInclusive;
 
 use super::world::level::LevelInfo;
 
@@ -133,7 +134,7 @@ pub fn extract_tiles(
             })
         })
         .fold(
-            HashMap::<String, Tile>::new(),
+            HashMap::<String, Tile>::default(),
             |mut tiles, (tile_name, (name, constraints))| {
                 tiles
                     .entry(tile_name.to_string())

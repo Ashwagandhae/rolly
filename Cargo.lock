@@ -1172,6 +1172,7 @@ dependencies = [
  "poly2tri-rs",
  "quad-storage",
  "rapier2d",
+ "rustc-hash",
  "simple-easing",
  "svg2polylines",
  "xml",

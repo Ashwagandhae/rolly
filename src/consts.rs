@@ -26,3 +26,6 @@ pub const DEAD_ALIVE_TRANSITION_DURATION: f32 = 1.0;
 pub const RESPAWN_AQUIRE_RADIUS: f32 = 0.3;
 
 pub const LAZY_PLAYER_RECT: f32 = 0.1;
+
+pub const LEVEL_X: f32 = 0.0;
+pub const LEVEL_Y: f32 = -3.0;

@@ -55,7 +55,7 @@ impl World {
             levels,
         };
 
-        load_level(assets, &mut world, LevelId(0), vec2(0.0, 0.0));
+        load_level(assets, &mut world, LevelId(0));
 
         update::update(assets, settings, &mut world);
 

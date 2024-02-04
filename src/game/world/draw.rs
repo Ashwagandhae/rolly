@@ -3,7 +3,11 @@ use crate::{
     game::{assets::Assets, Settings},
 };
 
-use super::{life_state::LifeState, polygon::three_points_rect, World};
+use super::{
+    life_state::LifeState,
+    polygon::{add_rect_padding, three_points_rect},
+    World,
+};
 use macroquad::prelude::*;
 
 pub mod floor;
@@ -222,12 +226,15 @@ pub fn get_camera_rect(world: &World) -> Rect {
     let camera_target = world.camera.target;
     let camera_start = camera_target - vec2(1.0, screen_height() / screen_height()) / camera_zoom;
     let camera_end = camera_target + vec2(1.0, screen_height() / screen_height()) / camera_zoom;
+    // add_rect_padding(
     Rect::new(
         camera_start.x,
         camera_start.y,
         camera_end.x - camera_start.x,
         camera_end.y - camera_start.y,
     )
+    //     ,-0.5,
+    // )
 }
 
 pub fn pos_in_camera(world: &World, pos: Vec2) -> bool {

@@ -1,6 +1,7 @@
 use macroquad::prelude::*;
 use rapier2d::dynamics::RigidBodyHandle;
 
+use crate::consts::*;
 use crate::game::assets::Assets;
 use crate::game::world::floor::Material;
 use crate::game::world::svg::{read_svg, SvgShape};
@@ -90,8 +91,10 @@ impl LevelInfo {
         }
     }
 }
-
-pub fn load_level(assets: &Assets, world: &mut World, level: LevelId, pos: Vec2) {
+pub fn load_level(assets: &Assets, world: &mut World, level: LevelId) {
+    load_level_at_pos(assets, world, level, vec2(LEVEL_X, LEVEL_Y))
+}
+pub fn load_level_at_pos(assets: &Assets, world: &mut World, level: LevelId, pos: Vec2) {
     let (_, svg) = &assets.levels[&level.0];
     let (_, items) = read_svg(svg);
     for item in items {
@@ -154,7 +157,7 @@ pub fn update_loaded_levels(assets: &Assets, world: &mut World) {
     let levels_to_unload = find_levels_to_unload(assets, world);
     for &(level, pos) in levels_to_load.iter() {
         if !world.levels.contains_key(&level) {
-            load_level(assets, world, level, pos);
+            load_level_at_pos(assets, world, level, pos);
         }
     }
     for level in levels_to_unload {
