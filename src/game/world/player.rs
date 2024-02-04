@@ -1,4 +1,6 @@
-use super::frame::ContinuousFrame;
+use super::frame::{ContinuousFrame, Transition, Tween};
+use super::level::LevelId;
+use super::life_state::LifeState;
 use super::physics_world::PhysicsWorld;
 use crate::consts::*;
 use macroquad::prelude::*;
@@ -26,7 +28,7 @@ impl Polly {
         linvel: Vec2,
         angvel: f32,
     ) -> Self {
-        let (body_handle, collider_handle) = physics_world.add_body(
+        let (body_handle, collider_handle) = physics_world.add_body_and_collider(
             RigidBodyBuilder::dynamic()
                 .translation(translation.into())
                 .rotation(rotation)
@@ -85,7 +87,7 @@ impl Rolly {
         linvel: Vec2,
         angvel: f32,
     ) -> Self {
-        let (body_handle, collider_handle) = physics_world.add_body(
+        let (body_handle, collider_handle) = physics_world.add_body_and_collider(
             RigidBodyBuilder::dynamic()
                 .translation(translation.into())
                 .rotation(rotation)
@@ -154,79 +156,12 @@ impl Body {
             Body::Polly(_) => panic!("unwrap_rolly called on Body::Polly"),
         }
     }
-}
 
-#[derive(Debug, Clone)]
-pub enum Transition {
-    Start,
-    End,
-    Between { time: f32, duration: f32, rev: bool },
-}
-
-impl Transition {
-    pub fn tick(&mut self, delta_time: f32) {
-        *self = match self.clone() {
-            Self::Start => Self::Start,
-            Self::End => Self::End,
-            Self::Between {
-                mut time,
-                duration,
-                rev,
-            } => {
-                time += delta_time / duration * if rev { -1.0 } else { 1.0 };
-                if time < 0.0 {
-                    Self::End
-                } else if time > 1.0 {
-                    Self::Start
-                } else {
-                    Self::Between {
-                        time,
-                        duration,
-                        rev,
-                    }
-                }
-            }
+    pub fn despawn(&self, physics_world: &mut PhysicsWorld) {
+        match self {
+            Body::Polly(polly) => polly.despawn(physics_world),
+            Body::Rolly(rolly) => rolly.despawn(physics_world),
         }
-    }
-    pub fn run(&mut self, duration: f32, rev: bool) {
-        *self = match (self.clone(), rev) {
-            (no_change @ Self::Start, false) | (no_change @ Self::End, true) => no_change,
-            (Self::Start, true) | (Self::End, false) => Self::Between {
-                time: if rev { 1.0 } else { 0.0 },
-                duration,
-                rev,
-            },
-            (Self::Between { time, .. }, _) => Self::Between {
-                time,
-                duration,
-                rev,
-            },
-        }
-    }
-}
-
-pub struct Tween {
-    pub target: f32,
-    pub value: f32,
-    pub half_life: f32,
-}
-
-impl Tween {
-    pub fn new(value: f32, half_life: f32) -> Self {
-        Self {
-            target: value,
-            value,
-            half_life,
-        }
-    }
-    pub fn tick(&mut self, delta_time: f32) {
-        self.value += (self.target - self.value) * (delta_time / self.half_life) * 0.5;
-    }
-    pub fn set(&mut self, value: f32) {
-        self.target = value;
-    }
-    pub fn get(&self) -> f32 {
-        self.value
     }
 }
 
@@ -235,12 +170,12 @@ pub struct Player {
     pub body: Body,
     pub rolly_polly_transition: Transition,
     pub eye_x: Tween,
+    pub life_state: LifeState,
+    pub respawn: LevelId,
 }
 impl Player {
     pub fn spawn(physics_world: &mut PhysicsWorld) -> Self {
-        let direction = Direction::Right;
-
-        let body = Body::Polly(Polly::spawn(
+        let body = Body::Rolly(Rolly::spawn(
             physics_world,
             vec2(0.0, 0.0),
             0.0,
@@ -248,15 +183,39 @@ impl Player {
             0.0,
         ));
 
+        let direction = Direction::Right;
         let rolly_polly_transition = Transition::End;
-
         let eye_x = Tween::new(1.0, 0.05);
+
+        let life_state = LifeState::Dead(Transition::End);
+        let respawn = LevelId::first();
 
         Self {
             direction,
             body,
             rolly_polly_transition,
             eye_x,
+            life_state,
+            respawn,
         }
+    }
+    pub fn alive(&self) -> bool {
+        matches!(self.life_state, LifeState::Alive(Transition::End))
+    }
+    /// reset everything except life_state, respawn, and any physics_world state
+    pub fn reset(&mut self, physics_world: &mut PhysicsWorld) {
+        self.body.despawn(physics_world);
+
+        self.body = Body::Rolly(Rolly::spawn(
+            physics_world,
+            vec2(0.0, 0.0),
+            0.0,
+            vec2(0.0, 0.0),
+            0.0,
+        ));
+
+        self.direction = Direction::Right;
+        self.rolly_polly_transition = Transition::End;
+        self.eye_x = Tween::new(1.0, 0.05);
     }
 }

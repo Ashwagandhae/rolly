@@ -5,6 +5,9 @@ use super::super::polygon::{shrink_polygon, trimesh_indices_from_polygon};
 use super::{draw_texture_centered, draw_trimesh, get_camera_rect, pixel_to_meter};
 use crate::consts::*;
 use crate::game::assets::{Assets, TileConstraints};
+use crate::game::world::polygon::{
+    add_rect_padding, get_rect_offset_under_polygon_edge, two_points_rect,
+};
 use crate::game::world::thing::ThingDraw;
 use crate::game::world::World;
 use hecs::Or;
@@ -32,21 +35,6 @@ pub fn draw(assets: &Assets, world: &World) {
             draw_thing(assets, world, thing_draw, body);
         }
     }
-}
-
-fn two_points_rect(v1: Vec2, v2: Vec2) -> Rect {
-    let start = vec2(v1.x.min(v2.x), v1.y.min(v2.y));
-    let end = vec2(v1.x.max(v2.x), v1.y.max(v2.y));
-    Rect::new(start.x, start.y, end.x - start.x, end.y - start.y)
-}
-
-fn add_rect_padding(rect: Rect, padding: f32) -> Rect {
-    Rect::new(
-        rect.x - padding,
-        rect.y - padding,
-        rect.w + padding * 2.0,
-        rect.h + padding * 2.0,
-    )
 }
 
 pub fn draw_tiled(assets: &Assets, world: &World, tiled_draw: &TiledDraw) {
@@ -114,16 +102,18 @@ impl TiledDraw {
             .circular_tuple_windows()
             .map(|(&vl, &v1, &v2, &vr)| {
                 let distance = (v2 - v1).length();
-                let get_offset = |vl: Vec2, vr: Vec2| {
-                    let angle = vl.angle_between(vr);
-                    if angle < 0.0 {
-                        0.0
-                    } else {
-                        pixel_to_meter(TILE_HEIGHT - TILE_DOWN * 2.0) / (angle / 2.0).tan()
-                    }
-                };
-                let left_offset = get_offset(vl - v1, v2 - v1);
-                let right_offset = get_offset(v1 - v2, vr - v2);
+
+                let polygon_penetration_height = pixel_to_meter(TILE_HEIGHT - TILE_DOWN * 2.0);
+                let left_offset = get_rect_offset_under_polygon_edge(
+                    vl - v1,
+                    v2 - v1,
+                    polygon_penetration_height,
+                );
+                let right_offset = get_rect_offset_under_polygon_edge(
+                    v1 - v2,
+                    vr - v2,
+                    polygon_penetration_height,
+                );
 
                 let distance_offset = distance - left_offset - right_offset;
                 let count = (distance_offset / pixel_to_meter(TILE_WIDTH)) as usize;

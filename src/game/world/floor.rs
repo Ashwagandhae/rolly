@@ -1,10 +1,17 @@
 use super::draw::floor::{LiquidDraw, TiledDraw};
+use super::draw::pixel_to_meter;
 use super::level::LevelId;
-use super::polygon::{trimesh_indices_from_polygon, trimesh_indices_from_polygon_minimal};
+use super::physics_world::PhysicsWorld;
+use super::polygon::{
+    add_rect_padding, get_rect_offset_under_polygon_edge, trimesh_indices_from_polygon,
+    trimesh_indices_from_polygon_minimal, two_points_rect,
+};
 use super::World;
 use crate::consts::*;
 use crate::game::assets::Assets;
+use itertools::Itertools;
 use macroquad::prelude::*;
+use nalgebra::UnitComplex;
 use rapier2d::prelude::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,7 +76,7 @@ impl Material {
             )),
             Self::Water => VertexDraw::Liquid(LiquidDraw::new(
                 vertices,
-                with_alpha(Color::from_hex(0x1667B1), 1.0),
+                with_alpha(Color::from_hex(0x1667B1), 0.7),
             )),
         }
     }
@@ -91,28 +98,98 @@ pub fn spawn_floor(
 ) {
     let vertices = vertices.iter().map(|v| *v + pos).collect::<Vec<_>>();
     let trimesh_indices = trimesh_indices_from_polygon(&vertices);
-    let builder = {
-        let trimesh_indices = if material.rigid() {
-            // no need for collision on inner triangles
-            trimesh_indices_from_polygon_minimal(&vertices)
-        } else {
-            trimesh_indices.clone()
-        };
-        let vertices = vertices.iter().map(|&v| v.into()).collect::<Vec<_>>();
-        ColliderBuilder::trimesh(vertices, trimesh_indices)
-            .friction(PLATFORM_FRICTION)
-            .friction_combine_rule(CoefficientCombineRule::Max)
-    };
+
     let vertex_draw = material.to_vertex_draw(assets, &vertices);
 
-    let (body_handle, collider_handle) = world.physics_world.add_body(
+    let body_handle = world.physics_world.add_body(
         RigidBodyBuilder::fixed()
             .translation(Vec2::ZERO.into())
             .build(),
-        builder.sensor(!material.rigid()).build(),
     );
-
     world
         .entities
-        .spawn((body_handle, collider_handle, vertex_draw, material, level));
+        .spawn((body_handle, vertex_draw, material, level));
+
+    if material.rigid() {
+        for (rect, builder) in polygon_colliders_from_rects(&vertices) {
+            let builder = builder
+                .friction(PLATFORM_FRICTION)
+                .friction_combine_rule(CoefficientCombineRule::Max);
+            world.entities.spawn((
+                LazyCollider {
+                    rect,
+                    builder,
+                    body_handle,
+                },
+                material,
+                level,
+            ));
+        }
+    } else {
+        let trimesh_indices = trimesh_indices.clone();
+        let vertices = vertices.iter().map(|&v| v.into()).collect::<Vec<_>>();
+        let builder = ColliderBuilder::trimesh(vertices, trimesh_indices).sensor(true);
+        let handle = world.physics_world.add_collider(
+            builder
+                .friction(PLATFORM_FRICTION)
+                .friction_combine_rule(CoefficientCombineRule::Max)
+                .build(),
+            body_handle,
+        );
+        world.entities.spawn((handle, material, level));
+    }
+}
+
+fn polygon_collider_from_rects(vertices: &[Vec2]) -> ColliderBuilder {
+    ColliderBuilder::compound(
+        vertices
+            .iter()
+            .circular_tuple_windows()
+            .map(|(&vl, &v1, &v2, &vr)| {
+                let distance = (v2 - v1).length();
+                let height = pixel_to_meter(30.0);
+                let left_offset = get_rect_offset_under_polygon_edge(vl - v1, v2 - v1, height);
+                let right_offset = get_rect_offset_under_polygon_edge(v1 - v2, vr - v2, height);
+                let distance_offset = distance - left_offset - right_offset;
+                let rotation = Vec2::new(1.0, 0.0).angle_between(v1 - v2);
+                let rotation_down = rotation + std::f32::consts::PI / 2.0;
+                let pos = v1
+                    + (v2 - v1).normalize() * (left_offset + distance_offset / 2.0)
+                    + Vec2::from_angle(rotation_down) * height / 2.0;
+                let shape = SharedShape::cuboid(distance_offset / 2.0, height / 2.0);
+                let isometry = Isometry::from_parts(pos.into(), UnitComplex::from_angle(rotation));
+                (isometry, shape)
+            })
+            .collect(),
+    )
+}
+
+fn polygon_colliders_from_rects(vertices: &[Vec2]) -> Vec<(Rect, ColliderBuilder)> {
+    vertices
+        .iter()
+        .circular_tuple_windows()
+        .map(|(&vl, &v1, &v2, &vr)| {
+            let distance = (v2 - v1).length();
+            let height = pixel_to_meter(30.0);
+            let left_offset = get_rect_offset_under_polygon_edge(vl - v1, v2 - v1, height);
+            let right_offset = get_rect_offset_under_polygon_edge(v1 - v2, vr - v2, height);
+            let distance_offset = distance - left_offset - right_offset;
+            let rotation = Vec2::new(1.0, 0.0).angle_between(v1 - v2);
+            let rotation_down = rotation + std::f32::consts::PI / 2.0;
+            let pos = v1
+                + (v2 - v1).normalize() * (left_offset + distance_offset / 2.0)
+                + Vec2::from_angle(rotation_down) * height / 2.0;
+            let builder = ColliderBuilder::cuboid(distance_offset / 2.0, height / 2.0)
+                .translation(pos.into())
+                .rotation(rotation);
+            let rect = add_rect_padding(two_points_rect(v1, v2), pixel_to_meter(30.0));
+            (rect, builder)
+        })
+        .collect()
+}
+
+pub struct LazyCollider {
+    pub rect: Rect,
+    pub builder: ColliderBuilder,
+    pub body_handle: RigidBodyHandle,
 }

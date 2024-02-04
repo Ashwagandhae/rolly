@@ -4,7 +4,9 @@ use hecs::{BuiltEntity, Component, EntityBuilder as HecsEntityBuilder};
 use macroquad::prelude::*;
 use rapier2d::prelude::*;
 
-use super::{draw::meter_to_pixel, floor::Material, level::LevelId, World};
+use super::{
+    draw::meter_to_pixel, floor::Material, level::LevelId, physics_world::PhysicsWorld, World,
+};
 use crate::{
     consts::*,
     game::{assets::Assets, world::collider},
@@ -32,6 +34,27 @@ pub fn thing_info_to_name(info: ThingInfo) -> Option<ThingName> {
 }
 pub struct Respawn {}
 
+pub struct AreaOfEffect {
+    pub radius: f32,
+}
+
+impl AreaOfEffect {
+    pub fn new(radius: f32) -> Self {
+        Self { radius }
+    }
+    pub fn contains(
+        &self,
+        body: &RigidBodyHandle,
+        physics_world: &PhysicsWorld,
+        target_pos: Vec2,
+    ) -> bool {
+        let body = physics_world.get_body(*body).unwrap();
+        let pos = body.position().translation.vector;
+        let distance = (Vec2::from(pos) - target_pos).length();
+        distance < self.radius
+    }
+}
+
 pub fn thing_name_to_entity(
     assets: &Assets,
     world: &mut World,
@@ -46,7 +69,9 @@ pub fn thing_name_to_entity(
     match name {
         ThingName::Stone => t(world, "stone", Material::Stone),
         ThingName::Spike => t(world, "spike", Material::Stone),
-        ThingName::RespawnGrass => t(world, "respawn-grass", Material::Grass).add(Respawn {}),
+        ThingName::RespawnGrass => t(world, "respawn-grass", Material::Grass)
+            .add(Respawn {})
+            .add(AreaOfEffect::new(RESPAWN_AQUIRE_RADIUS)),
     }
 }
 
@@ -123,8 +148,9 @@ fn basic_thing_ex(
         .translation(pos.into())
         .rotation(rotation);
 
-    let (body_handle, collider_handle) =
-        world.physics_world.add_body(body.build(), collider.build());
+    let (body_handle, collider_handle) = world
+        .physics_world
+        .add_body_and_collider(body.build(), collider.build());
 
     EntityBuilder::new()
         .add(body_handle)

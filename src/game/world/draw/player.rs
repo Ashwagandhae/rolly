@@ -1,13 +1,20 @@
 use std::f32::consts::PI;
 
-use super::super::player::{Body, Polly, Transition};
+use super::super::player::{Body, Polly};
 use super::lerp;
 use super::{draw_texture_centered, pixel_to_meter};
 use crate::game::assets::Assets;
+use crate::game::world::frame::Transition;
+use crate::game::world::life_state::LifeState;
 use crate::game::world::World;
 use macroquad::prelude::*;
 
 pub fn draw(assets: &Assets, world: &World) {
+    if let LifeState::Alive(Transition::Start | Transition::Between { .. }) =
+        world.player.life_state
+    {
+        return;
+    }
     let player = world
         .physics_world
         .get_body(world.player.body.any_body_handle())

@@ -1,5 +1,3 @@
-
-
 use macroquad::prelude::*;
 use rapier2d::dynamics::RigidBodyHandle;
 
@@ -10,6 +8,8 @@ use crate::game::world::thing::ThingInfo;
 
 use super::draw::{get_camera_rect, meter_to_pixel, pos_in_camera};
 use super::floor::spawn_floor;
+use super::frame::Transition;
+use super::life_state::LifeState;
 use super::thing::spawn_thing;
 use super::World;
 
@@ -39,6 +39,9 @@ impl LevelId {
             None
         }
     }
+    pub fn first() -> LevelId {
+        LevelId(0)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -51,7 +54,6 @@ pub struct LevelInfo {
 pub struct Markers {
     pub start: Vec2,
     pub end: Vec2,
-    pub original_spawn: Option<Vec2>,
 }
 
 impl std::default::Default for Markers {
@@ -59,7 +61,6 @@ impl std::default::Default for Markers {
         Self {
             start: vec2(0.0, 0.0),
             end: vec2(0.0, 0.0),
-            original_spawn: None,
         }
     }
 }
@@ -76,7 +77,6 @@ impl LevelInfo {
                         continue;
                     }
                     match item.color {
-                        0x0000FF => markers.original_spawn = Some(circle.pos),
                         0x00FF00 => markers.start = circle.pos,
                         0xFF0000 => markers.end = circle.pos,
                         _ => {}
@@ -93,7 +93,6 @@ impl LevelInfo {
 }
 
 pub fn load_level(assets: &Assets, world: &mut World, level: LevelId, pos: Vec2) {
-    println!("Loading level {}", level.0);
     let (_, svg) = &assets.levels[&level.0];
     let (_, items) = read_svg(svg);
     for item in items {
@@ -117,7 +116,6 @@ pub fn load_level(assets: &Assets, world: &mut World, level: LevelId, pos: Vec2)
 }
 
 pub fn unload_level(world: &mut World, level: LevelId) {
-    println!("Unloading level {}", level.0);
     world.levels.remove(&level).unwrap();
     let remove_entities = world
         .entities
@@ -139,10 +137,15 @@ pub fn unload_level(world: &mut World, level: LevelId) {
     }
 }
 
+pub fn update_loaded_levels_alive(assets: &Assets, world: &mut World) {
+    // only load/unload levels if the player is alive
+    if !world.player.alive() {
+        return;
+    }
+    update_loaded_levels(assets, world);
+}
+
 pub fn update_loaded_levels(assets: &Assets, world: &mut World) {
-    // for (level, pos) in world.levels.clone() {
-    //     load_adjacent_levels(assets, world, level, pos);
-    // }
     let levels_to_load = world
         .levels
         .iter()

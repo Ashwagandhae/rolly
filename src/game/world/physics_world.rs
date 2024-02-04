@@ -70,7 +70,11 @@ impl PhysicsWorld {
         );
     }
 
-    pub fn add_body(
+    pub fn add_body(&mut self, body: RigidBody) -> RigidBodyHandle {
+        self.rigid_body_set.insert(body)
+    }
+
+    pub fn add_body_and_collider(
         &mut self,
         body: RigidBody,
         collider: Collider,
@@ -101,7 +105,15 @@ impl PhysicsWorld {
         self.rigid_body_set.get_mut(handle)
     }
 
-    pub fn add_collider(&mut self, collider: Collider) -> ColliderHandle {
+    pub fn add_collider(
+        &mut self,
+        collider: Collider,
+        body_handle: RigidBodyHandle,
+    ) -> ColliderHandle {
+        self.collider_set
+            .insert_with_parent(collider, body_handle, &mut self.rigid_body_set)
+    }
+    pub fn add_collider_alone(&mut self, collider: Collider) -> ColliderHandle {
         self.collider_set.insert(collider)
     }
 

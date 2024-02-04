@@ -36,10 +36,10 @@ impl Game {
 
 pub fn tick(game: &mut Game) {
     if let Some(world) = &mut game.world {
-        draw_world(&game.settings, &game.assets, world);
         if let Screen::Running = game.screen {
             update_world(&game.assets, &game.settings, world);
         }
+        draw_world(&game.settings, &game.assets, world);
     }
     // if requested to quit, save world
     if is_quit_requested() {

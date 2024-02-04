@@ -39,10 +39,10 @@ pub fn trimesh_indices_from_polygon(vertices: &[Vec2]) -> Vec<[u32; 3]> {
         .map(|(i, v)| ((*v).into(), i as u32))
         .collect();
     let triangles = triangulate_polygon(vertices);
-    let map = |v: Vec2| -> u32 { vertices_index_map[&v.into()] };
+    let map = |v: Vec2| -> Option<u32> { vertices_index_map.get(&v.into()).copied() };
     let indices = triangles
         .into_iter()
-        .map(|[v1, v2, v3]| [map(v1), map(v2), map(v3)])
+        .filter_map(|[v1, v2, v3]| Some([map(v1)?, map(v2)?, map(v3)?]))
         .collect::<Vec<_>>();
     indices
 }
@@ -81,6 +81,17 @@ pub fn trimesh_indices_from_polygon_minimal(vertices: &[Vec2]) -> Vec<[u32; 3]> 
         })
         .collect::<Vec<_>>();
     indices
+}
+
+/// When wanting to draw a rect aligned with and inside the edges of a polygon, they can intersect.
+/// This function adds padding to the rect to avoid that.
+pub fn get_rect_offset_under_polygon_edge(vl: Vec2, vr: Vec2, height: f32) -> f32 {
+    let angle = vl.angle_between(vr);
+    if angle < 0.0 {
+        0.0
+    } else {
+        height / (angle / 2.0).tan()
+    }
 }
 
 pub fn triangulate_polygon(vertices: &[Vec2]) -> Vec<[Vec2; 3]> {
@@ -139,4 +150,19 @@ pub fn vertices_to_clockwise(vertices: Vec<Vec2>) -> Vec<Vec2> {
         vertices.reverse();
     }
     vertices
+}
+
+pub fn two_points_rect(v1: Vec2, v2: Vec2) -> Rect {
+    let start = vec2(v1.x.min(v2.x), v1.y.min(v2.y));
+    let end = vec2(v1.x.max(v2.x), v1.y.max(v2.y));
+    Rect::new(start.x, start.y, end.x - start.x, end.y - start.y)
+}
+
+pub fn add_rect_padding(rect: Rect, padding: f32) -> Rect {
+    Rect::new(
+        rect.x - padding,
+        rect.y - padding,
+        rect.w + padding * 2.0,
+        rect.h + padding * 2.0,
+    )
 }

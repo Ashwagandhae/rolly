@@ -3,7 +3,7 @@ use crate::{
     game::{assets::Assets, Settings},
 };
 
-use super::World;
+use super::{life_state::LifeState, World};
 use macroquad::prelude::*;
 
 pub mod floor;
@@ -13,6 +13,8 @@ pub fn draw(settings: &Settings, assets: &Assets, world: &World) {
     draw_back(settings, assets, world);
     player::draw(assets, world);
     floor::draw(assets, world);
+
+    draw_life_state(world);
 }
 
 pub fn draw_texture_centered(
@@ -220,4 +222,22 @@ pub fn get_camera_rect(world: &World) -> Rect {
 
 pub fn pos_in_camera(world: &World, pos: Vec2) -> bool {
     get_camera_rect(world).contains(pos)
+}
+
+fn draw_life_state(world: &World) {
+    set_default_camera();
+    let darkness = match &world.player.life_state {
+        LifeState::Alive(t) => t.get(),
+        LifeState::Dead(t) => 1.0 - t.get(),
+    };
+    if darkness <= 0.0 {
+        return;
+    }
+    draw_rectangle(
+        0.0,
+        0.0,
+        screen_width(),
+        screen_height(),
+        Color::new(0.0, 0.0, 0.0, darkness),
+    );
 }
