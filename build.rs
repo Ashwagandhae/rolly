@@ -1,4 +1,4 @@
-use imagesize;
+
 use std::env;
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -13,7 +13,7 @@ fn main() {
 
 fn assets() {
     let path = Path::new(&env::var("OUT_DIR").unwrap()).join("asset_codegen.rs");
-    let mut file = BufWriter::new(File::create(&path).unwrap());
+    let mut file = BufWriter::new(File::create(path).unwrap());
 
     let textures = std::fs::read_dir("assets/textures").unwrap();
     let filenames = textures
