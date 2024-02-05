@@ -199,6 +199,7 @@ pub fn draw_thing(assets: &Assets, world: &World, thing_draw: &ThingDraw, body: 
     let body = world.physics_world.get_body(*body).unwrap();
     let pos = body.position().translation.vector.into();
     let rotate = body.position().rotation.angle();
+    // gl_use_material(assets.materials["screen"]);
     draw_texture_centered_lazy(
         world,
         assets,
@@ -207,4 +208,5 @@ pub fn draw_thing(assets: &Assets, world: &World, thing_draw: &ThingDraw, body: 
         rotate,
         None,
     );
+    // gl_use_default_material();
 }

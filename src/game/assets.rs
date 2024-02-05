@@ -10,6 +10,7 @@ pub struct Assets {
     pub tiles: HashMap<String, Tile>,
     pub colliders: HashMap<String, String>,
     pub levels: HashMap<usize, (LevelInfo, String)>,
+    pub materials: HashMap<String, Material>,
 }
 
 include!(concat!(env!("OUT_DIR"), "/asset_codegen.rs"));
@@ -87,14 +88,71 @@ impl Assets {
                     }),
             )
             .collect::<HashMap<_, _>>();
+        let materials = [(
+            "screen".to_owned(),
+            load_material(
+                CRT_VERTEX_SHADER,
+                CRT_FRAGMENT_SHADER,
+                MaterialParams {
+                    uniforms: vec![("Center".to_owned(), UniformType::Float2)],
+                    ..Default::default()
+                },
+            )
+            .unwrap(),
+        )]
+        .iter()
+        .cloned()
+        .collect();
         Self {
             textures,
             tiles,
             colliders,
             levels,
+            materials,
         }
     }
 }
+
+const CRT_FRAGMENT_SHADER: &'static str = r#"#version 100
+precision lowp float;
+
+varying vec2 uv;
+varying vec2 uv_screen;
+varying vec2 center;
+
+uniform sampler2D _ScreenTexture;
+
+void main() {
+    float gradient = length(uv);
+    vec2 uv_zoom = (uv_screen - center) * gradient + center;
+
+    gl_FragColor = texture2D(_ScreenTexture, uv_zoom);
+}"#;
+
+// grass shader
+const CRT_VERTEX_SHADER: &'static str = "#version 100
+attribute vec3 position;
+attribute vec2 texcoord;
+
+varying lowp vec2 center;
+varying lowp vec2 uv;
+varying lowp vec2 uv_screen;
+
+uniform mat4 Model;
+uniform mat4 Projection;
+
+uniform vec2 Center;
+
+void main() {
+    vec4 res = Projection * Model * vec4(position, 1);
+    vec4 c = Projection * Model * vec4(Center, 0, 1);
+
+    uv_screen = res.xy / 2.0 + vec2(0.5, 0.5);
+    center = c.xy / 2.0 + vec2(0.5, 0.5);
+    uv = texcoord;
+
+    gl_Position = res;
+}";
 
 impl Assets {
     pub fn get(&self, index: &str) -> Option<&SizedTexture> {
