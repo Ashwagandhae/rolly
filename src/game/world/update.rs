@@ -10,7 +10,7 @@ use super::life_state::LifeState;
 use super::physics_world::PhysicsWorld;
 use super::player::{Body, Polly, Rolly};
 
-use super::thing::{AreaOfEffect, Respawn};
+use super::thing::{AreaOfEffect, Respawn, ThingId};
 use super::World;
 use crate::consts::*;
 use crate::game::assets::Assets;
@@ -62,7 +62,6 @@ fn update_camera(settings: &Settings, world: &mut World) {
         zoom: vec2(camera_zoom(settings).x, -camera_zoom(settings).y),
         ..world.camera
     };
-    set_camera(&world.camera);
 }
 
 pub fn camera_zoom(settings: &Settings) -> Vec2 {
@@ -324,7 +323,7 @@ fn load_respawn(assets: &Assets, world: &mut World) {
     for (level, _) in world.levels.clone() {
         unload_level(world, level)
     }
-    load_level(assets, world, world.player.respawn);
+    load_level(assets, world, world.player.respawn.0);
 
     let (pos, _) = find_respawn(world, world.player.respawn);
     world.camera.target = pos;
@@ -332,13 +331,15 @@ fn load_respawn(assets: &Assets, world: &mut World) {
     update_loaded_levels(assets, world);
 }
 
-fn find_respawn(world: &World, respawn: LevelId) -> (Vec2, f32) {
+fn find_respawn(world: &World, respawn: (LevelId, ThingId)) -> (Vec2, f32) {
+    let (level_id, thing_id) = respawn;
     world
         .entities
-        .query::<(&Respawn, &LevelId, &RigidBodyHandle)>()
+        .query::<(&Respawn, &LevelId, &ThingId, &RigidBodyHandle)>()
         .into_iter()
-        .filter(|(_, (_, &level, _))| level == respawn)
-        .map(|(_, (_, _, pos))| {
+        .filter(|(_, (_, &level, _, _))| level == level_id)
+        .filter(|(_, (_, _, &thing, _))| thing == thing_id)
+        .map(|(_, (_, _, _, pos))| {
             let body = world.physics_world.get_body(*pos).unwrap();
             ((*body.translation()).into(), body.rotation().angle())
         })
@@ -358,14 +359,21 @@ fn player_respawn(world: &mut World) {
     let body = get_player_body(world);
     let player_pos: Vec2 = (*body.translation()).into();
     let current_respawn = world.player.respawn;
-    for (_, (_, _, _, level)) in world
+    for (_, (_, _, _, level_id, thing_id)) in world
         .entities
-        .query_mut::<(&Respawn, &RigidBodyHandle, &AreaOfEffect, &LevelId)>()
+        .query_mut::<(
+            &Respawn,
+            &RigidBodyHandle,
+            &AreaOfEffect,
+            &LevelId,
+            &ThingId,
+        )>()
         .into_iter()
-        .filter(|(_, (_, _, _, &level))| level >= current_respawn)
-        .filter(|(_, (_, handle, area, _))| area.contains(handle, &world.physics_world, player_pos))
+        .filter(|(_, (_, handle, area, _, _))| {
+            area.contains(handle, &world.physics_world, player_pos)
+        })
     {
-        world.player.respawn = *level;
+        world.player.respawn = (*level_id, *thing_id);
     }
     if is_key_pressed(KeyCode::R) {
         world.player.life_state = LifeState::Dead(Transition::Start);

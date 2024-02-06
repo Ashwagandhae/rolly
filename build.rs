@@ -1,4 +1,3 @@
-
 use std::env;
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -64,8 +63,8 @@ fn assets() {
     }
     writeln!(file, "];").unwrap();
 
-    let colliders = std::fs::read_dir("assets/levels").unwrap();
-    let filenames = colliders
+    let levels = std::fs::read_dir("assets/levels").unwrap();
+    let filenames = levels
         .filter_map(|entry| entry.ok())
         .filter_map(|entry| {
             let path = entry.path();
@@ -77,6 +76,24 @@ fn assets() {
         .collect::<Vec<_>>();
 
     writeln!(file, "pub const LEVEL_FILENAMES: &[&str] = &[").unwrap();
+    for filename in filenames.iter() {
+        writeln!(file, r#"    "{}","#, filename).unwrap();
+    }
+    writeln!(file, "];").unwrap();
+
+    let lights = std::fs::read_dir("assets/lights").unwrap();
+    let filenames = lights
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| {
+            let path = entry.path();
+            match path.extension().and_then(|s| s.to_str()) {
+                Some("svg") => Some(entry.file_name().into_string().unwrap()),
+                _ => None,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    writeln!(file, "pub const LIGHT_FILENAMES: &[&str] = &[").unwrap();
     for filename in filenames.iter() {
         writeln!(file, r#"    "{}","#, filename).unwrap();
     }

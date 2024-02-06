@@ -3,20 +3,19 @@ use crate::{
     game::{assets::Assets, Settings},
 };
 
-use super::{
-    life_state::LifeState,
-    polygon::{add_rect_padding, three_points_rect},
-    World,
-};
+use super::{life_state::LifeState, light::Lights, polygon::three_points_rect, World};
 use macroquad::prelude::*;
+use rapier2d::dynamics::RigidBodyHandle;
 
 pub mod floor;
 pub mod player;
 
 pub fn draw(settings: &Settings, assets: &Assets, world: &World) {
+    set_camera(&world.camera);
     draw_back(settings, assets, world);
     player::draw(assets, world);
     floor::draw(assets, world);
+    draw_light(world);
 
     draw_life_state(world);
 }
@@ -257,4 +256,17 @@ fn draw_life_state(world: &World) {
         screen_height(),
         Color::new(0.0, 0.0, 0.0, darkness),
     );
+}
+
+fn draw_light(world: &World) {
+    for (_, (body, light)) in world.entities.query::<(&RigidBodyHandle, &Lights)>().iter() {
+        let body = world.physics_world.get_body(*body).unwrap();
+        let pos = Vec2::from(body.position().translation.vector);
+        let angle = body.position().rotation.angle();
+        for (light, strength) in &light.lights {
+            let pos = pos + light.pos.rotate(Vec2::from_angle(angle));
+            let color = Color::new(1.0, 1.0, 1.0, *strength);
+            draw_circle(pos.x, pos.y, light.radius, color);
+        }
+    }
 }

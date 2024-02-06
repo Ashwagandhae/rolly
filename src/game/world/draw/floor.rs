@@ -1,11 +1,8 @@
 use std::f32::consts::PI;
 
 use super::super::floor::VertexDraw;
-use super::super::polygon::{shrink_polygon, trimesh_indices_from_polygon};
-use super::{
-    draw_texture_centered, draw_texture_centered_lazy, draw_trimesh_lazy, get_camera_rect,
-    pixel_to_meter,
-};
+use super::super::polygon::{shrink_polygon, trimesh_from_polygon};
+use super::{draw_texture_centered_lazy, draw_trimesh_lazy, get_camera_rect, pixel_to_meter};
 use crate::consts::*;
 use crate::game::assets::{Assets, TileConstraints};
 use crate::game::world::polygon::{
@@ -73,13 +70,18 @@ pub fn draw_tiled(assets: &Assets, world: &World, tiled_draw: &TiledDraw) {
 #[derive(Debug, Clone)]
 pub struct LiquidDraw {
     pub color: Color,
-    pub trimesh: (Vec<Vec2>, Vec<[u32; 3]>),
+    pub vertices: Vec<Vec2>,
+    pub indices: Vec<[u32; 3]>,
 }
 
 impl LiquidDraw {
     pub fn new(vertices: &[Vec2], color: Color) -> Self {
-        let trimesh = (vertices.to_vec(), trimesh_indices_from_polygon(vertices));
-        Self { color, trimesh }
+        let indices = trimesh_from_polygon(vertices);
+        Self {
+            color,
+            indices,
+            vertices: vertices.to_vec(),
+        }
     }
 }
 #[derive(Debug, Clone)]
@@ -95,8 +97,8 @@ impl TiledDraw {
         let shrink_1 = shrink_polygon(&vertices, pixel_to_meter(40.0));
         let shrink_2 = shrink_polygon(&shrink_1, pixel_to_meter(40.0));
         let map = |vertices: Vec<Vec2>| {
-            let trimesh_indices = trimesh_indices_from_polygon(&vertices);
-            (vertices, trimesh_indices)
+            let indices = trimesh_from_polygon(&vertices);
+            (vertices, indices)
         };
         let trimeshes = [map(vertices.to_vec()), map(shrink_1), map(shrink_2)];
 
@@ -189,8 +191,8 @@ pub fn generate_textures_from_tile<'a>(
 pub fn draw_liquid(world: &World, liquid_draw: &LiquidDraw) {
     draw_trimesh_lazy(
         world,
-        &liquid_draw.trimesh.0,
-        &liquid_draw.trimesh.1,
+        &liquid_draw.vertices,
+        &liquid_draw.indices,
         liquid_draw.color,
     );
 }
@@ -199,7 +201,6 @@ pub fn draw_thing(assets: &Assets, world: &World, thing_draw: &ThingDraw, body: 
     let body = world.physics_world.get_body(*body).unwrap();
     let pos = body.position().translation.vector.into();
     let rotate = body.position().rotation.angle();
-    // gl_use_material(assets.materials["screen"]);
     draw_texture_centered_lazy(
         world,
         assets,
@@ -208,5 +209,4 @@ pub fn draw_thing(assets: &Assets, world: &World, thing_draw: &ThingDraw, body: 
         rotate,
         None,
     );
-    // gl_use_default_material();
 }

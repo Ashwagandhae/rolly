@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::game::world::{frame::Transition, level::LevelId, update::camera_zoom};
+use crate::game::world::level::LevelId;
 
 use self::level::load_level;
 
@@ -11,7 +11,6 @@ pub mod physics_world;
 use physics_world::PhysicsWorld;
 pub mod floor;
 pub mod player;
-use life_state::LifeState;
 use player::Player;
 
 use super::{assets::Assets, ui::settings::Settings};
@@ -20,6 +19,7 @@ pub mod draw;
 pub mod frame;
 pub mod level;
 pub mod life_state;
+pub mod light;
 pub mod polygon;
 pub mod svg;
 pub mod thing;

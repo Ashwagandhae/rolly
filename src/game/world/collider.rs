@@ -5,7 +5,7 @@ use rapier2d::prelude::*;
 use crate::game::assets::Assets;
 
 use super::{
-    polygon::trimesh_indices_from_polygon,
+    polygon::trimesh_from_polygon,
     svg::{read_svg, SvgShape},
 };
 
@@ -24,7 +24,7 @@ pub fn shape_to_collider(shape: &SvgShape) -> (Isometry2<f32>, SharedShape) {
         }
         SvgShape::Path(path) => {
             let vertices = &path.vertices;
-            let indices = trimesh_indices_from_polygon(&vertices);
+            let indices = trimesh_from_polygon(&vertices);
             let vertices = vertices.iter().map(|&v| v.into()).collect::<Vec<_>>();
             (Vec2::ZERO.into(), SharedShape::trimesh(vertices, indices))
         }

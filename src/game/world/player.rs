@@ -2,6 +2,7 @@ use super::frame::{ContinuousFrame, Transition, Tween};
 use super::level::LevelId;
 use super::life_state::LifeState;
 use super::physics_world::PhysicsWorld;
+use super::thing::ThingId;
 use crate::consts::*;
 use macroquad::prelude::*;
 use rapier2d::prelude::*;
@@ -173,7 +174,7 @@ pub struct Player {
     pub rolly_polly_transition: Transition,
     pub eye_x: Tween,
     pub life_state: LifeState,
-    pub respawn: LevelId,
+    pub respawn: (LevelId, ThingId),
 }
 impl Player {
     pub fn spawn(physics_world: &mut PhysicsWorld) -> Self {
@@ -186,11 +187,11 @@ impl Player {
         ));
 
         let direction = Direction::Right;
-        let rolly_polly_transition = Transition::End;
+        let rolly_polly_transition = Transition::Start;
         let eye_x = Tween::new(1.0, 0.05);
 
         let life_state = LifeState::Dead(Transition::End);
-        let respawn = LevelId::first();
+        let respawn = (LevelId::first(), ThingId(0));
 
         Self {
             direction,
@@ -217,7 +218,7 @@ impl Player {
         ));
 
         self.direction = Direction::Right;
-        self.rolly_polly_transition = Transition::End;
+        self.rolly_polly_transition = Transition::Start;
         self.eye_x = Tween::new(1.0, 0.05);
     }
 }

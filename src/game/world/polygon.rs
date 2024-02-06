@@ -1,9 +1,8 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use itertools::Itertools;
 use macroquad::prelude::*;
 use ordered_float::OrderedFloat;
-use poly2tri_rs::{Point, SweeperBuilder};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct OrderedVec2 {
@@ -32,23 +31,23 @@ impl From<Vec2> for OrderedVec2 {
     }
 }
 
-pub fn trimesh_indices_from_polygon(vertices: &[Vec2]) -> Vec<[u32; 3]> {
+pub fn trimesh_from_polygon(vertices: &[Vec2]) -> Vec<[u32; 3]> {
+    let triangles = triangulate_polygon(vertices);
     let vertices_index_map: HashMap<OrderedVec2, u32> = vertices
         .iter()
         .enumerate()
         .map(|(i, v)| ((*v).into(), i as u32))
         .collect();
-    let triangles = triangulate_polygon(vertices);
-    let map = |v: Vec2| -> Option<u32> { vertices_index_map.get(&v.into()).copied() };
+    let map = |v: Vec2| -> u32 { vertices_index_map[&v.into()] };
     let indices = triangles
         .into_iter()
-        .filter_map(|[v1, v2, v3]| Some([map(v1)?, map(v2)?, map(v3)?]))
+        .map(|[v1, v2, v3]| [map(v1), map(v2), map(v3)])
         .collect::<Vec<_>>();
     indices
 }
 
 // only include outer edge triangles
-pub fn trimesh_indices_from_polygon_minimal(vertices: &[Vec2]) -> Vec<[u32; 3]> {
+fn trimesh_indices_from_polygon_minimal(vertices: &[Vec2]) -> Vec<[u32; 3]> {
     let vertices_index_map: HashMap<OrderedVec2, u32> = vertices
         .iter()
         .enumerate()
@@ -102,23 +101,42 @@ pub fn triangulate_polygon(vertices: &[Vec2]) -> Vec<[Vec2; 3]> {
     }
 }
 
+use earcutr::earcut;
+use poly2tri_rs::{Point, SweeperBuilder};
 pub fn triangulate_polygon_over_4(vertices: &[Vec2]) -> Vec<[Vec2; 3]> {
-    let sweeper = SweeperBuilder::new(
-        vertices
-            .iter()
-            .map(|v| Point::new(v.x.into(), v.y.into()))
-            .collect::<Vec<_>>(),
-    )
-    .build();
-    let triangles = sweeper.triangulate();
+    // let sweeper = SweeperBuilder::new(
+    //     vertices
+    //         .iter()
+    //         .map(|v| Point::new(v.x.into(), v.y.into()))
+    //         .collect::<Vec<_>>(),
+    // )
+    // .build();
+    // let triangles = sweeper.triangulate();
+    // triangles
+    //     .into_iter()
+    //     .map(|triangle| {
+    //         let [v1, v2, v3] = triangle.points;
+    //         [
+    //             vec2(v1.x as f32, v1.y as f32),
+    //             vec2(v2.x as f32, v2.y as f32),
+    //             vec2(v3.x as f32, v3.y as f32),
+    //         ]
+    //     })
+    //     .collect::<Vec<_>>()
+    let vertices = vertices
+        .iter()
+        .map(|v| [v.x, v.y])
+        .flatten()
+        .collect::<Vec<_>>();
+    let triangles = earcut(&vertices, &[], 2).unwrap();
     triangles
-        .into_iter()
-        .map(|triangle| {
-            let [v1, v2, v3] = triangle.points;
+        .chunks(3)
+        .map(|chunk| {
+            let [v1, v2, v3] = chunk else { unreachable!() };
             [
-                vec2(v1.x as f32, v1.y as f32),
-                vec2(v2.x as f32, v2.y as f32),
-                vec2(v3.x as f32, v3.y as f32),
+                vec2(vertices[v1 * 2], vertices[v1 * 2 + 1]),
+                vec2(vertices[v2 * 2], vertices[v2 * 2 + 1]),
+                vec2(vertices[v3 * 2], vertices[v3 * 2 + 1]),
             ]
         })
         .collect::<Vec<_>>()

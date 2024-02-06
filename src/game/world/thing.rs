@@ -8,6 +8,7 @@ use super::{
     draw::meter_to_pixel,
     floor::{LazyCollider, Material},
     level::LevelId,
+    light::{load_light, Lights},
     physics_world::PhysicsWorld,
     World,
 };
@@ -21,6 +22,7 @@ pub enum ThingName {
     Stone,
     Spike,
     RespawnGrass,
+    RespawnMud,
 }
 pub fn thing_info_to_name(info: ThingInfo) -> Option<ThingName> {
     use ThingName::*;
@@ -33,9 +35,53 @@ pub fn thing_info_to_name(info: ThingInfo) -> Option<ThingName> {
             _ => Spike,
         },
         0xCCCFAA => RespawnGrass,
+        0x938260 => RespawnMud,
         _ => return None,
     })
 }
+
+pub fn thing_name_to_entity(
+    assets: &Assets,
+    world: &mut World,
+    name: ThingName,
+    pos: Vec2,
+    rotation: f32,
+) -> EntityBuilder {
+    let t = |world: &mut World, texture: &str, material: Material| {
+        basic_thing(assets, world, pos, rotation, texture, material)
+    };
+    let tx = |world: &mut World, texture: &str, material: Material, ex: BasicThingParams| {
+        basic_thing_ex(assets, world, pos, rotation, texture, material, ex)
+    };
+    let _m = |pos: Vec2| basic_marker(pos);
+    match name {
+        ThingName::Stone => t(world, "stone", Material::Stone),
+        ThingName::Spike => t(world, "spike", Material::Stone),
+        ThingName::RespawnGrass => tx(
+            world,
+            "respawn-grass",
+            Material::Grass,
+            BasicThingParams {
+                light: LightRepr::DefaultFile,
+                ..Default::default()
+            },
+        )
+        .add(Respawn {})
+        .add(AreaOfEffect::new(RESPAWN_AQUIRE_RADIUS)),
+        ThingName::RespawnMud => tx(
+            world,
+            "respawn-mud",
+            Material::Mud,
+            BasicThingParams {
+                light: LightRepr::DefaultFile,
+                ..Default::default()
+            },
+        )
+        .add(Respawn {})
+        .add(AreaOfEffect::new(RESPAWN_AQUIRE_RADIUS)),
+    }
+}
+
 pub struct Respawn {}
 
 pub struct AreaOfEffect {
@@ -59,30 +105,20 @@ impl AreaOfEffect {
     }
 }
 
-pub fn thing_name_to_entity(
-    assets: &Assets,
-    world: &mut World,
-    name: ThingName,
-    pos: Vec2,
-    rotation: f32,
-) -> EntityBuilder {
-    let t = |world: &mut World, texture: &str, material: Material| {
-        basic_thing(assets, world, pos, rotation, texture, material)
-    };
-    let _m = |pos: Vec2| basic_marker(pos);
-    match name {
-        ThingName::Stone => t(world, "stone", Material::Stone),
-        ThingName::Spike => t(world, "spike", Material::Stone),
-        ThingName::RespawnGrass => t(world, "respawn-grass", Material::Grass)
-            .add(Respawn {})
-            .add(AreaOfEffect::new(RESPAWN_AQUIRE_RADIUS)),
-    }
-}
-
 #[derive(Clone)]
 pub enum ColliderRepr {
+    None,
+    DefaultFile,
     File(String),
     Raw(Rect, ColliderBuilder),
+}
+
+#[derive(Debug, Clone)]
+pub enum LightRepr {
+    None,
+    DefaultFile,
+    File(String),
+    Raw(Lights),
 }
 
 #[derive(Debug, Clone)]
@@ -104,14 +140,16 @@ impl UsizeShapeSize {
 
 #[derive(Clone)]
 pub struct BasicThingParams {
-    pub collider: Option<ColliderRepr>,
+    pub collider: ColliderRepr,
+    pub light: LightRepr,
     pub lazy: bool,
 }
 
 impl std::default::Default for BasicThingParams {
     fn default() -> Self {
         Self {
-            collider: None,
+            collider: ColliderRepr::DefaultFile,
+            light: LightRepr::None,
             lazy: true,
         }
     }
@@ -141,40 +179,55 @@ fn basic_thing_ex(
     material: Material,
     ex: BasicThingParams,
 ) -> EntityBuilder {
-    let (rect, collider) = match ex
-        .collider
-        .unwrap_or(ColliderRepr::File(texture.to_owned()))
-    {
-        ColliderRepr::File(collider_file) => collider::load_collider(assets, &collider_file),
-        ColliderRepr::Raw(rect, builder) => (rect, builder),
-    };
-    let collider = collider
-        .friction(PLATFORM_FRICTION)
-        .friction_combine_rule(CoefficientCombineRule::Max)
-        .sensor(!material.rigid());
-
     let body = RigidBodyBuilder::fixed()
         .translation(pos.into())
         .rotation(rotation);
 
-    let (body_handle, collider_handle) = world
-        .physics_world
-        .add_body_and_collider(body.build(), collider.build());
+    let body_handle = world.physics_world.add_body(body.build());
 
     let mut builder = EntityBuilder::new()
         .add(body_handle)
-        .add(collider_handle)
         .add(ThingDraw {
             texture: texture.to_owned(),
         })
         .add(material);
-    let rect = Rect::new(pos.x - rect.w / 2.0, pos.y - rect.h / 2.0, rect.w, rect.h);
-    if ex.lazy {
-        builder = builder.add(LazyCollider {
-            rect,
-            builder: collider,
-            body_handle,
-        })
+
+    let collider = match ex.collider {
+        ColliderRepr::DefaultFile => Some(collider::load_collider(assets, &texture)),
+        ColliderRepr::File(collider_file) => Some(collider::load_collider(assets, &collider_file)),
+        ColliderRepr::Raw(rect, builder) => Some((rect, builder)),
+        ColliderRepr::None => None,
+    };
+
+    if let Some((rect, collider)) = collider {
+        let collider = collider
+            .friction(PLATFORM_FRICTION)
+            .friction_combine_rule(CoefficientCombineRule::Max)
+            .sensor(!material.rigid());
+
+        if ex.lazy {
+            let rect = Rect::new(pos.x - rect.w / 2.0, pos.y - rect.h / 2.0, rect.w, rect.h);
+            builder = builder.add(LazyCollider {
+                rect,
+                builder: collider,
+                body_handle,
+            })
+        } else {
+            let handle = world
+                .physics_world
+                .add_collider(collider.build(), body_handle);
+            builder = builder.add(handle);
+        }
+    }
+
+    let light = match ex.light {
+        LightRepr::DefaultFile => Some(load_light(assets, &texture)),
+        LightRepr::File(light_file) => Some(load_light(assets, &light_file)),
+        LightRepr::Raw(light) => Some(light),
+        LightRepr::None => None,
+    };
+    if let Some(light) = light {
+        builder = builder.add(light);
     }
     builder
 }
@@ -250,11 +303,15 @@ impl ThingInfo {
         }
     }
 }
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+pub struct ThingId(pub usize);
+
 pub fn spawn_thing(
     assets: &Assets,
     world: &mut World,
     thing_info: ThingInfo,
     level: LevelId,
+    thing_id: ThingId,
     pos: Vec2,
 ) {
     let Some(name) = thing_info_to_name(thing_info.clone()) else {
@@ -262,6 +319,7 @@ pub fn spawn_thing(
     };
     let mut entity =
         thing_name_to_entity(assets, world, name, thing_info.pos + pos, thing_info.rotate)
-            .add(level);
+            .add(level)
+            .add(thing_id);
     world.entities.spawn(entity.build());
 }

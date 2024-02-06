@@ -2,8 +2,7 @@ use super::draw::floor::{LiquidDraw, TiledDraw};
 use super::draw::pixel_to_meter;
 use super::level::LevelId;
 use super::polygon::{
-    add_rect_padding, get_rect_offset_under_polygon_edge, trimesh_indices_from_polygon,
-    two_points_rect,
+    add_rect_padding, get_rect_offset_under_polygon_edge, trimesh_from_polygon, two_points_rect,
 };
 use super::World;
 use crate::consts::*;
@@ -95,7 +94,6 @@ pub fn spawn_floor(
     pos: Vec2,
 ) {
     let vertices = vertices.iter().map(|v| *v + pos).collect::<Vec<_>>();
-    let trimesh_indices = trimesh_indices_from_polygon(&vertices);
 
     let vertex_draw = material.to_vertex_draw(assets, &vertices);
 
@@ -124,9 +122,9 @@ pub fn spawn_floor(
             ));
         }
     } else {
-        let trimesh_indices = trimesh_indices.clone();
+        let indices = trimesh_from_polygon(&vertices);
         let vertices = vertices.iter().map(|&v| v.into()).collect::<Vec<_>>();
-        let builder = ColliderBuilder::trimesh(vertices, trimesh_indices).sensor(true);
+        let builder = ColliderBuilder::trimesh(vertices, indices).sensor(true);
         let handle = world.physics_world.add_collider(
             builder
                 .friction(PLATFORM_FRICTION)
@@ -137,30 +135,6 @@ pub fn spawn_floor(
         world.entities.spawn((handle, material, level));
     }
 }
-
-// fn polygon_collider_from_rects(vertices: &[Vec2]) -> ColliderBuilder {
-//     ColliderBuilder::compound(
-//         vertices
-//             .iter()
-//             .circular_tuple_windows()
-//             .map(|(&vl, &v1, &v2, &vr)| {
-//                 let distance = (v2 - v1).length();
-//                 let height = pixel_to_meter(10.0);
-//                 let left_offset = get_rect_offset_under_polygon_edge(vl - v1, v2 - v1, height);
-//                 let right_offset = get_rect_offset_under_polygon_edge(v1 - v2, vr - v2, height);
-//                 let distance_offset = distance - left_offset - right_offset;
-//                 let rotation = Vec2::new(1.0, 0.0).angle_between(v1 - v2);
-//                 let rotation_down = rotation + std::f32::consts::PI / 2.0;
-//                 let pos = v1
-//                     + (v2 - v1).normalize() * (left_offset + distance_offset / 2.0)
-//                     + Vec2::from_angle(rotation_down) * height / 2.0;
-//                 let shape = SharedShape::cuboid(distance_offset / 2.0, height / 2.0);
-//                 let isometry = Isometry::from_parts(pos.into(), UnitComplex::from_angle(rotation));
-//                 (isometry, shape)
-//             })
-//             .collect(),
-//     )
-// }
 
 fn polygon_colliders_from_rects(vertices: &[Vec2]) -> Vec<(Rect, ColliderBuilder)> {
     vertices

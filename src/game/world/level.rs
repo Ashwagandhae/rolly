@@ -10,7 +10,7 @@ use crate::game::world::thing::ThingInfo;
 use super::draw::{get_camera_rect, meter_to_pixel, pos_in_camera};
 use super::floor::spawn_floor;
 
-use super::thing::spawn_thing;
+use super::thing::{spawn_thing, ThingId};
 use super::World;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -101,12 +101,14 @@ pub fn load_level_at_pos(assets: &Assets, world: &mut World, level: LevelId, pos
         match item.shape {
             SvgShape::Rect(rect) => {
                 let thing_info = ThingInfo::new_rect(rect.pos, rect.rotate, rect.dims, item.color);
-                spawn_thing(assets, world, thing_info, level, pos);
+                let thing_id = ThingId(item.index);
+                spawn_thing(assets, world, thing_info, level, thing_id, pos);
             }
             SvgShape::Circle(circle) => {
                 let thing_info =
                     ThingInfo::new_circle(circle.pos, circle.rotate, circle.r, item.color);
-                spawn_thing(assets, world, thing_info, level, pos);
+                let thing_id = ThingId(item.index);
+                spawn_thing(assets, world, thing_info, level, thing_id, pos);
             }
             SvgShape::Path(path) => {
                 let material = Material::from_hex_color(item.color);

@@ -45,6 +45,7 @@ pub struct CircleShape {
 pub struct SvgItem {
     pub shape: SvgShape,
     pub color: u32,
+    pub index: usize,
 }
 
 type StartElementEvent = (OwnedName, Vec<OwnedAttribute>, Namespace);
@@ -65,6 +66,7 @@ pub fn read_svg(svg: &str) -> (Vec2, Vec<SvgItem>) {
     let width = parse_attr("width", &svg_start_tag.1).expect("no width attribute");
     let height = parse_attr("height", &svg_start_tag.1).expect("no height attribute");
     let mut items = Vec::new();
+    let mut index = 0;
     for event in reader {
         match event {
             Ok(XmlEvent::StartElement { name, .. }) if name.local_name == "clipPath" => break,
@@ -95,7 +97,12 @@ pub fn read_svg(svg: &str) -> (Vec2, Vec<SvgItem>) {
                     "circle" => SvgShape::Circle(read_svg_circle(attributes)),
                     _ => panic!("unknown shape {} in svg", name.local_name),
                 };
-                items.push(SvgItem { shape, color })
+                items.push(SvgItem {
+                    shape,
+                    color,
+                    index,
+                });
+                index += 1;
             }
             _ => {}
         }
@@ -115,7 +122,11 @@ fn parse_attr(name: &str, attributes: &[OwnedAttribute]) -> Option<f32> {
 fn get_rotate(attributes: &[OwnedAttribute]) -> f32 {
     let Some(rotate) = &attributes
         .iter()
-        .find(|a| a.name.local_name == "transform").map(|a| &a.value) else { return 0.0;};
+        .find(|a| a.name.local_name == "transform")
+        .map(|a| &a.value)
+    else {
+        return 0.0;
+    };
     let rotate = rotate.trim_start_matches("rotate(");
     let rotate = rotate.trim_end_matches(")");
     let (rotate, _) = rotate
