@@ -11,7 +11,7 @@ pub struct Light {
 }
 
 #[derive(Debug, Clone)]
-pub struct Lights {
+pub struct LightGroup {
     pub lights: Vec<(Light, f32)>,
 }
 
@@ -28,7 +28,7 @@ pub fn shape_to_light(shape: &SvgShape) -> Light {
     }
 }
 
-pub fn load_light(assets: &Assets, light: &str) -> Lights {
+pub fn load_light(assets: &Assets, light: &str) -> LightGroup {
     let svg = &assets.lights[light];
     let (size, items) = read_svg(&svg);
     let lights = items
@@ -40,5 +40,11 @@ pub fn load_light(assets: &Assets, light: &str) -> Lights {
         })
         .map(|light| (light, 1.0))
         .collect::<Vec<_>>();
-    Lights { lights }
+    LightGroup { lights }
+}
+
+#[derive(Debug, Clone)]
+pub struct Power {
+    pub strength: f32,
+    pub radius: f32,
 }

@@ -1,6 +1,9 @@
 pub mod assets;
+pub mod config;
 pub mod ui;
 pub mod world;
+
+use crate::game::config::GameConfig;
 
 use self::{assets::Assets, ui::settings::Settings};
 use macroquad::prelude::*;
@@ -12,10 +15,11 @@ pub struct Game {
     pub settings: Settings,
     pub screen: Screen,
     pub world: Option<World>,
+    pub config: GameConfig,
 }
 
 impl Game {
-    pub async fn new() -> Self {
+    pub async fn new(config: GameConfig) -> Self {
         let settings = Settings::new();
         ui::init(&settings);
         Self {
@@ -23,6 +27,7 @@ impl Game {
             settings: Settings::new(),
             screen: Screen::Home,
             world: None,
+            config,
         }
     }
     pub fn quit(&self) -> bool {
@@ -37,7 +42,7 @@ impl Game {
 pub fn tick(game: &mut Game) {
     if let Some(world) = &mut game.world {
         if let Screen::Running = game.screen {
-            update_world(&game.assets, &game.settings, world);
+            update_world(&game.assets, &game.settings, world, &game.config);
         }
         draw_world(&game.settings, &game.assets, world);
     }

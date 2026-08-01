@@ -140,7 +140,7 @@ fn home(game: &mut Game) {
 }
 
 fn new_world(game: &mut Game) {
-    game.world = Some(World::new(&game.settings, &game.assets));
+    game.world = Some(World::new(&game.settings, &game.assets, &game.config));
 }
 
 fn draw_label(ui: &mut Ui, setting: &Setting<impl SettingInfo>) {

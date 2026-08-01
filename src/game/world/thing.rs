@@ -8,7 +8,7 @@ use super::{
     draw::meter_to_pixel,
     floor::{LazyCollider, Material},
     level::LevelId,
-    light::{load_light, Lights},
+    light::{load_light, LightGroup},
     physics_world::PhysicsWorld,
     World,
 };
@@ -23,6 +23,7 @@ pub enum ThingName {
     Spike,
     RespawnGrass,
     RespawnMud,
+    Mushroom,
 }
 pub fn thing_info_to_name(info: ThingInfo) -> Option<ThingName> {
     use ThingName::*;
@@ -31,13 +32,18 @@ pub fn thing_info_to_name(info: ThingInfo) -> Option<ThingName> {
     let color = info.color;
     Some(match color {
         0x495380 => match size {
-            Rect(200, _) => Stone,
+            Rect(x, _) if x >= 150 => Stone,
             _ => Spike,
         },
         0xCCCFAA => RespawnGrass,
         0x938260 => RespawnMud,
+        0x93607A => Mushroom,
         _ => return None,
     })
+}
+pub struct Mushroom {
+    pub touching_player: bool,
+    pub rotation: f32,
 }
 
 pub fn thing_name_to_entity(
@@ -57,6 +63,19 @@ pub fn thing_name_to_entity(
     match name {
         ThingName::Stone => t(world, "stone", Material::Stone),
         ThingName::Spike => t(world, "spike", Material::Stone),
+        ThingName::Mushroom => tx(
+            world,
+            "mushroom",
+            Material::Mud,
+            BasicThingParams {
+                collider: ColliderRepr::DefaultFile,
+                ..Default::default()
+            },
+        )
+        .add(Mushroom {
+            touching_player: false,
+            rotation,
+        }),
         ThingName::RespawnGrass => tx(
             world,
             "respawn-grass",
@@ -118,7 +137,7 @@ pub enum LightRepr {
     None,
     DefaultFile,
     File(String),
-    Raw(Lights),
+    Raw(LightGroup),
 }
 
 #[derive(Debug, Clone)]

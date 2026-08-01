@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::game::world::level::LevelId;
+use crate::game::{config::GameConfig, world::level::LevelId};
 
 use self::level::load_level;
 
@@ -34,7 +34,7 @@ pub struct World {
 }
 
 impl World {
-    pub fn new(settings: &Settings, assets: &Assets) -> Self {
+    pub fn new(settings: &Settings, assets: &Assets, config: &GameConfig) -> Self {
         println!("Loading world...");
         let mut physics_world = PhysicsWorld::new();
         let camera = Camera2D {
@@ -57,7 +57,7 @@ impl World {
 
         load_level(assets, &mut world, LevelId(0));
 
-        update::update(assets, settings, &mut world);
+        update::update(assets, settings, &mut world, config);
 
         world
     }

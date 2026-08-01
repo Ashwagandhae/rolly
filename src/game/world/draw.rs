@@ -3,7 +3,7 @@ use crate::{
     game::{assets::Assets, Settings},
 };
 
-use super::{life_state::LifeState, light::Lights, polygon::three_points_rect, World};
+use super::{life_state::LifeState, light::LightGroup, polygon::three_points_rect, World};
 use macroquad::prelude::*;
 use rapier2d::dynamics::RigidBodyHandle;
 
@@ -259,7 +259,11 @@ fn draw_life_state(world: &World) {
 }
 
 fn draw_light(world: &World) {
-    for (_, (body, light)) in world.entities.query::<(&RigidBodyHandle, &Lights)>().iter() {
+    for (_, (body, light)) in world
+        .entities
+        .query::<(&RigidBodyHandle, &LightGroup)>()
+        .iter()
+    {
         let body = world.physics_world.get_body(*body).unwrap();
         let pos = Vec2::from(body.position().translation.vector);
         let angle = body.position().rotation.angle();

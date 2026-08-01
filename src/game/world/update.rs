@@ -7,6 +7,7 @@ use super::level::{
     load_level, unload_level, update_loaded_levels, update_loaded_levels_alive, LevelId,
 };
 use super::life_state::LifeState;
+use super::light::{Light, LightGroup};
 use super::physics_world::PhysicsWorld;
 use super::player::{Body, Polly, Rolly};
 
@@ -14,12 +15,14 @@ use super::thing::{AreaOfEffect, Respawn, ThingId};
 use super::World;
 use crate::consts::*;
 use crate::game::assets::Assets;
+use crate::game::config::GameConfig;
+use crate::game::world::thing::Mushroom;
 use crate::game::Settings;
 use macroquad::prelude::*;
 use nalgebra::UnitComplex;
 use rapier2d::prelude::*;
 
-pub fn update(assets: &Assets, settings: &Settings, world: &mut World) {
+pub fn update(assets: &Assets, settings: &Settings, world: &mut World, config: &GameConfig) {
     update_camera(settings, world);
 
     update_loaded_levels_alive(assets, world);
@@ -29,13 +32,18 @@ pub fn update(assets: &Assets, settings: &Settings, world: &mut World) {
 
     player_body(world);
     player_water(world);
+    player_mushroom(world);
     player_fall(world);
+    if config.cheat {
+        player_cheat_movement(world);
+    }
 
     player_transition(world);
 
     player_respawn(world);
 
     update_life_state(assets, world);
+
     match world.player.body {
         Body::Rolly(_) => {}
         Body::Polly(_) => player_polly(world),
@@ -144,6 +152,33 @@ fn player_polly(world: &mut World) {
     player_feet_frame(world);
     player_direction(world);
     player_movement(world);
+}
+const CHEAT_MOVE_SPEED: f32 = 0.1;
+fn player_cheat_movement(world: &mut World) {
+    let handle = world.player.body.any_body_handle();
+    let rigid_body = world.physics_world.get_body_mut(handle).unwrap();
+    let mut pos = rigid_body.position().clone();
+    let mut used = false;
+    if is_key_down(KeyCode::S) {
+        pos.translation.y += CHEAT_MOVE_SPEED;
+        used = true;
+    }
+    if is_key_down(KeyCode::W) {
+        pos.translation.y -= CHEAT_MOVE_SPEED;
+        used = true;
+    }
+    if is_key_down(KeyCode::D) {
+        pos.translation.x += CHEAT_MOVE_SPEED;
+        used = true;
+    }
+    if is_key_down(KeyCode::A) {
+        pos.translation.x -= CHEAT_MOVE_SPEED;
+        used = true;
+    }
+    if used {
+        rigid_body.set_position(pos, true);
+        rigid_body.set_linvel(Vec2::ZERO.into(), true);
+    }
 }
 
 fn player_movement(world: &mut World) {
@@ -351,6 +386,10 @@ fn get_player_body(world: &World) -> &RigidBody {
     let body = world.player.body.any_body_handle();
     world.physics_world.get_body(body).unwrap()
 }
+fn get_player_body_mut(world: &mut World) -> &mut RigidBody {
+    let body = world.player.body.any_body_handle();
+    world.physics_world.get_body_mut(body).unwrap()
+}
 
 fn player_respawn(world: &mut World) {
     if !world.player.alive() {
@@ -378,6 +417,38 @@ fn player_respawn(world: &mut World) {
     if is_key_pressed(KeyCode::R) {
         world.player.life_state = LifeState::Dead(Transition::Start);
     }
+}
+fn player_mushroom(world: &mut World) {
+    if !world.player.alive() {
+        return;
+    }
+    let body = get_player_body(world);
+    let mut linvel: Vec2 = body.linvel().clone().into();
+    let player_pos: Vec2 = (*body.translation()).into();
+    for (_, (mushroom, mushroom_handle)) in world
+        .entities
+        .query_mut::<(&mut Mushroom, &RigidBodyHandle)>()
+    {
+        let mushroom_body = world.physics_world.get_body(*mushroom_handle).unwrap();
+        let mushroom_pos: Vec2 = (*mushroom_body.translation()).into();
+        if player_pos.distance(mushroom_pos) < 0.2 {
+            if mushroom.touching_player {
+                continue;
+            }
+            mushroom.touching_player = true;
+            let dir = Vec2::from_angle(mushroom.rotation).rotate(Vec2::new(0.0, -1.0));
+
+            let current_speed_in_dir = linvel.dot(dir);
+
+            let velocity_delta = PLAYER_VEL_MUSHROOM - current_speed_in_dir;
+
+            linvel = linvel + (dir * velocity_delta);
+        } else {
+            mushroom.touching_player = false;
+        }
+    }
+    let body = get_player_body_mut(world);
+    body.set_linvel(linvel.into(), true);
 }
 
 fn player_fall(world: &mut World) {
@@ -427,5 +498,30 @@ fn update_lazy_collider(world: &mut World) {
     }
     for (entity, handle) in entities_add_collider {
         world.entities.insert_one(entity, handle).unwrap();
+    }
+}
+
+fn update_light(world: &mut World) {
+    let body = get_player_body(world);
+    let player_pos: Vec2 = (*body.translation()).into();
+    for (_, (body, light_group)) in world
+        .entities
+        .query::<(&RigidBodyHandle, &mut LightGroup)>()
+        .iter()
+    {
+        let body = world.physics_world.get_body(*body).unwrap();
+        let pos = Vec2::from(body.position().translation.vector);
+        let angle = body.position().rotation.angle();
+        for (light, strength) in light_group.lights.iter_mut() {
+            let pos = pos + light.pos.rotate(Vec2::from_angle(angle));
+            let dist = player_pos.distance(pos);
+            let range = 0.5;
+            let new_strength = if dist < range {
+                1.0 - dist / range
+            } else {
+                0.0
+            };
+            *strength += (new_strength - *strength) * 0.2;
+        }
     }
 }

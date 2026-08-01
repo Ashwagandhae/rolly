@@ -32,7 +32,10 @@ pub fn shape_to_collider(shape: &SvgShape) -> (Isometry2<f32>, SharedShape) {
 }
 
 pub fn load_collider(assets: &Assets, collider: &str) -> (Rect, ColliderBuilder) {
-    let svg = &assets.colliders[collider];
+    let svg = &assets
+        .colliders
+        .get(collider)
+        .expect(&format!("missing collider for {}", collider));
     let (size, items) = read_svg(&svg);
     let translate = -size / 2.0;
     let shapes = items
