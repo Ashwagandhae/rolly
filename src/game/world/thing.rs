@@ -16,50 +16,28 @@ use crate::{
     consts::*,
     game::{
         assets::Assets,
-        world::{collider, frame::Transition, level::DrawLayer, light::RippleState},
+        world::{
+            collider, draw::pixel_to_meter, frame::Transition, level::DrawLayer, light::RippleState,
+        },
     },
 };
 
-#[derive(Debug, Clone)]
-pub enum ThingName {
-    Stone,
-    Spike,
-    RespawnGrass,
-    RespawnMud,
-    RespawnStone,
-    Mushroom,
-}
-pub fn thing_info_to_name(info: ThingInfo) -> Option<ThingName> {
-    use ThingName::*;
-    use UsizeShapeSize::*;
-    let size = UsizeShapeSize::from_thing_info(&meter_to_pixel(info.size));
-    let color = info.color;
-    Some(match color {
-        0x495380 => match size {
-            Rect(x, _) if x >= 150 => Stone,
-            _ => Spike,
-        },
-        0xCCCFAA => RespawnGrass,
-        0x938260 => RespawnMud,
-        0xAAC4CF => RespawnStone,
-        0x93607A => Mushroom,
-        _ => return None,
-    })
-}
 pub struct Mushroom {
     pub touching_player: bool,
     pub rotation: f32,
 }
 
-pub fn thing_name_to_entity(
+pub fn thing_info_to_entity(
     assets: &Assets,
     world: &mut World,
-    name: ThingName,
+    shape_size: ThingInfoShapeSize,
+    color: u32,
     pos: Vec2,
     rotation: f32,
     level_id: LevelId,
     thing_id: ThingId,
-) -> EntityBuilder {
+) -> Option<EntityBuilder> {
+    use ThingInfoShapeSize::*;
     let t = |world: &mut World, texture: &str, material: Material| {
         basic_thing_ex(
             assets,
@@ -74,11 +52,44 @@ pub fn thing_name_to_entity(
     let tx = |world: &mut World, texture: &str, material: Material, ex: BasicThingParams| {
         basic_thing_ex(assets, world, pos, rotation, texture, material, ex)
     };
-    let _m = |pos: Vec2| basic_marker(pos);
-    match name {
-        ThingName::Stone => t(world, "stone", Material::Stone),
-        ThingName::Spike => t(world, "spike", Material::Stone),
-        ThingName::Mushroom => tx(
+    Some(match color {
+        0x495380 => match shape_size {
+            Rect(size) if dbg!(size.x) >= pixel_to_meter(150.0) => {
+                t(world, "stone", Material::Stone)
+            }
+            _ => t(world, "spike", Material::Stone),
+        },
+        0xCCCFAA => respawn_thing(
+            assets,
+            world,
+            pos,
+            rotation,
+            "respawn-grass",
+            Material::Grass,
+            level_id,
+            thing_id,
+        ),
+        0x938260 => respawn_thing(
+            assets,
+            world,
+            pos,
+            rotation,
+            "respawn-mud",
+            Material::Mud,
+            level_id,
+            thing_id,
+        ),
+        0xAAC4CF => respawn_thing(
+            assets,
+            world,
+            pos,
+            rotation,
+            "respawn-stone",
+            Material::Stone,
+            level_id,
+            thing_id,
+        ),
+        0x93607A => tx(
             world,
             "mushroom",
             Material::Mud,
@@ -91,37 +102,8 @@ pub fn thing_name_to_entity(
             touching_player: false,
             rotation,
         }),
-        ThingName::RespawnGrass => respawn_thing(
-            assets,
-            world,
-            pos,
-            rotation,
-            "respawn-grass",
-            Material::Grass,
-            level_id,
-            thing_id,
-        ),
-        ThingName::RespawnMud => respawn_thing(
-            assets,
-            world,
-            pos,
-            rotation,
-            "respawn-mud",
-            Material::Mud,
-            level_id,
-            thing_id,
-        ),
-        ThingName::RespawnStone => respawn_thing(
-            assets,
-            world,
-            pos,
-            rotation,
-            "respawn-stone",
-            Material::Mud,
-            level_id,
-            thing_id,
-        ),
-    }
+        _ => return None,
+    })
 }
 fn respawn_thing(
     assets: &Assets,
@@ -222,23 +204,6 @@ pub enum LightRepr {
     DefaultFile,
     File(String),
     Raw(LightGroup),
-}
-
-#[derive(Debug, Clone)]
-enum UsizeShapeSize {
-    Rect(usize, usize),
-    Circle(usize),
-}
-
-impl UsizeShapeSize {
-    pub fn from_thing_info(thing_info_shape_size: &ThingInfoShapeSize) -> Self {
-        match thing_info_shape_size {
-            ThingInfoShapeSize::Rect(dims) => {
-                UsizeShapeSize::Rect(dims.x.round() as usize, dims.y.round() as usize)
-            }
-            ThingInfoShapeSize::Circle(radius) => UsizeShapeSize::Circle(radius.round() as usize),
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -399,20 +364,18 @@ pub fn spawn_thing(
     pos: Vec2,
     draw_layer: DrawLayer,
 ) {
-    let Some(name) = thing_info_to_name(thing_info.clone()) else {
-        return;
-    };
-    let mut entity = thing_name_to_entity(
+    let Some(entity) = thing_info_to_entity(
         assets,
         world,
-        name,
+        thing_info.size,
+        thing_info.color,
         thing_info.pos + pos,
         thing_info.rotate,
         level,
         thing_id,
-    )
-    .add(level)
-    .add(thing_id)
-    .add(draw_layer);
+    ) else {
+        return;
+    };
+    let mut entity = entity.add(level).add(thing_id).add(draw_layer);
     world.entities.spawn(entity.build());
 }
