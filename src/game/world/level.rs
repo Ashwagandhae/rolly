@@ -4,14 +4,14 @@ use rapier2d::dynamics::RigidBodyHandle;
 use crate::consts::*;
 use crate::game::assets::Assets;
 use crate::game::world::floor::Material;
-use crate::game::world::svg::{read_svg, SvgShape};
+use crate::game::world::svg::{SvgShape, read_svg};
 use crate::game::world::thing::ThingInfo;
 
 use super::draw::{get_camera_rect, meter_to_pixel, pos_in_camera};
 use super::floor::spawn_floor;
 
-use super::thing::{spawn_thing, ThingId};
 use super::World;
+use super::thing::{ThingId, spawn_thing};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct LevelId(pub usize);
@@ -22,22 +22,14 @@ impl LevelId {
     }
     fn next(&self, assets: &Assets) -> Option<LevelId> {
         let next = LevelId(self.0 + 1);
-        if next.valid(assets) {
-            Some(next)
-        } else {
-            None
-        }
+        if next.valid(assets) { Some(next) } else { None }
     }
     fn prev(&self, assets: &Assets) -> Option<LevelId> {
         if self.0 == 0 {
             return None;
         }
         let prev = LevelId(self.0 - 1);
-        if prev.valid(assets) {
-            Some(prev)
-        } else {
-            None
-        }
+        if prev.valid(assets) { Some(prev) } else { None }
     }
     pub fn first() -> LevelId {
         LevelId(0)
@@ -55,6 +47,8 @@ pub struct Markers {
     pub start: Vec2,
     pub end: Vec2,
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct DrawLayer(usize);
 
 impl std::default::Default for Markers {
     fn default() -> Self {
@@ -98,21 +92,30 @@ pub fn load_level_at_pos(assets: &Assets, world: &mut World, level: LevelId, pos
     let (_, svg) = &assets.levels[&level.0];
     let (_, items) = read_svg(svg);
     for item in items {
+        let draw_layer = DrawLayer(item.index);
         match item.shape {
             SvgShape::Rect(rect) => {
                 let thing_info = ThingInfo::new_rect(rect.pos, rect.rotate, rect.dims, item.color);
                 let thing_id = ThingId(item.index);
-                spawn_thing(assets, world, thing_info, level, thing_id, pos);
+                spawn_thing(assets, world, thing_info, level, thing_id, pos, draw_layer);
             }
             SvgShape::Circle(circle) => {
                 let thing_info =
                     ThingInfo::new_circle(circle.pos, circle.rotate, circle.r, item.color);
                 let thing_id = ThingId(item.index);
-                spawn_thing(assets, world, thing_info, level, thing_id, pos);
+                spawn_thing(assets, world, thing_info, level, thing_id, pos, draw_layer);
             }
             SvgShape::Path(path) => {
                 let material = Material::from_hex_color(item.color);
-                spawn_floor(assets, world, path.vertices, material, level, pos);
+                spawn_floor(
+                    assets,
+                    world,
+                    path.vertices,
+                    material,
+                    level,
+                    pos,
+                    draw_layer,
+                );
             }
         }
     }

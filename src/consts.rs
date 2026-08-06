@@ -25,9 +25,14 @@ pub const CCD_ENABLED: bool = true;
 pub const DEAD_ALIVE_TRANSITION_DURATION: f32 = 1.0;
 
 pub const RESPAWN_AQUIRE_RADIUS: f32 = 0.3;
+pub const RESPAWN_INACTIVE_OFFSET: f32 = 160.0 / PIXEL_TO_METER;
+pub const RESPAWN_ACTIVE_TRANSITION_DURATION: f32 = 0.5;
 pub const MUSHROOM_BOUNCE_RADIUS: f32 = 0.1;
 
 pub const LAZY_PLAYER_RECT: f32 = 0.1;
 
 pub const LEVEL_X: f32 = 0.0;
 pub const LEVEL_Y: f32 = -3.0;
+
+pub const LIGHT_FLICKER_INTERVAL: f32 = 10.0;
+pub const LIGHT_FLICKER_GROW_SPEED: f32 = 3.0;

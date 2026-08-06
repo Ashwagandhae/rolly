@@ -121,6 +121,11 @@ impl Transition {
             },
         }
     }
+    pub fn running(duration: f32, forward: bool) -> Self {
+        let mut init = if forward { Self::Start } else { Self::End };
+        init.run(duration, forward);
+        init
+    }
     pub fn get(&self) -> f32 {
         match self {
             Self::Start => 1.0,

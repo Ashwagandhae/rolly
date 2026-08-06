@@ -5,21 +5,23 @@ use super::super::polygon::{shrink_polygon, trimesh_from_polygon};
 use super::{draw_texture_centered_lazy, draw_trimesh_lazy, get_camera_rect, pixel_to_meter};
 use crate::consts::*;
 use crate::game::assets::{Assets, TileConstraints};
+use crate::game::world::World;
+use crate::game::world::level::DrawLayer;
 use crate::game::world::polygon::{
     add_rect_padding, get_rect_offset_under_polygon_edge, two_points_rect,
 };
 use crate::game::world::thing::ThingDraw;
-use crate::game::world::World;
 use hecs::Or;
 use itertools::Itertools;
 use macroquad::prelude::*;
 use rapier2d::dynamics::RigidBodyHandle;
 
 pub fn draw(assets: &Assets, world: &World) {
-    for (_, (draw, body)) in world
+    for (_, (draw, body, _)) in world
         .entities
-        .query::<(Or<&VertexDraw, &ThingDraw>, &RigidBodyHandle)>()
+        .query::<(Or<&VertexDraw, &ThingDraw>, &RigidBodyHandle, &DrawLayer)>()
         .iter()
+        .sorted_by_key(|(_, (_, _, draw_layer))| *draw_layer)
     {
         if let Or::Left(vertex_draw) | Or::Both(vertex_draw, _) = draw {
             match vertex_draw {
@@ -199,7 +201,7 @@ pub fn draw_liquid(world: &World, liquid_draw: &LiquidDraw) {
 
 pub fn draw_thing(assets: &Assets, world: &World, thing_draw: &ThingDraw, body: &RigidBodyHandle) {
     let body = world.physics_world.get_body(*body).unwrap();
-    let pos = body.position().translation.vector.into();
+    let pos = Vec2::from(body.position().translation.vector) + thing_draw.offset;
     let rotate = body.position().rotation.angle();
     draw_texture_centered_lazy(
         world,

@@ -5,16 +5,19 @@ use macroquad::prelude::*;
 use rapier2d::prelude::*;
 
 use super::{
+    World,
     draw::meter_to_pixel,
     floor::{LazyCollider, Material},
     level::LevelId,
-    light::{load_light, LightGroup},
+    light::{FlickerState, LightGroup, LightState, load_light},
     physics_world::PhysicsWorld,
-    World,
 };
 use crate::{
     consts::*,
-    game::{assets::Assets, world::collider},
+    game::{
+        assets::Assets,
+        world::{collider, frame::Transition, level::DrawLayer, light::RippleState},
+    },
 };
 
 #[derive(Debug, Clone)]
@@ -23,6 +26,7 @@ pub enum ThingName {
     Spike,
     RespawnGrass,
     RespawnMud,
+    RespawnStone,
     Mushroom,
 }
 pub fn thing_info_to_name(info: ThingInfo) -> Option<ThingName> {
@@ -37,6 +41,7 @@ pub fn thing_info_to_name(info: ThingInfo) -> Option<ThingName> {
         },
         0xCCCFAA => RespawnGrass,
         0x938260 => RespawnMud,
+        0xAAC4CF => RespawnStone,
         0x93607A => Mushroom,
         _ => return None,
     })
@@ -52,9 +57,19 @@ pub fn thing_name_to_entity(
     name: ThingName,
     pos: Vec2,
     rotation: f32,
+    level_id: LevelId,
+    thing_id: ThingId,
 ) -> EntityBuilder {
     let t = |world: &mut World, texture: &str, material: Material| {
-        basic_thing(assets, world, pos, rotation, texture, material)
+        basic_thing_ex(
+            assets,
+            world,
+            pos,
+            rotation,
+            texture,
+            material,
+            BasicThingParams::default(),
+        )
     };
     let tx = |world: &mut World, texture: &str, material: Material, ex: BasicThingParams| {
         basic_thing_ex(assets, world, pos, rotation, texture, material, ex)
@@ -76,32 +91,101 @@ pub fn thing_name_to_entity(
             touching_player: false,
             rotation,
         }),
-        ThingName::RespawnGrass => tx(
+        ThingName::RespawnGrass => respawn_thing(
+            assets,
             world,
+            pos,
+            rotation,
             "respawn-grass",
             Material::Grass,
-            BasicThingParams {
-                light: LightRepr::DefaultFile,
-                ..Default::default()
-            },
-        )
-        .add(Respawn {})
-        .add(AreaOfEffect::new(RESPAWN_AQUIRE_RADIUS)),
-        ThingName::RespawnMud => tx(
+            level_id,
+            thing_id,
+        ),
+        ThingName::RespawnMud => respawn_thing(
+            assets,
             world,
+            pos,
+            rotation,
             "respawn-mud",
             Material::Mud,
-            BasicThingParams {
-                light: LightRepr::DefaultFile,
-                ..Default::default()
-            },
-        )
-        .add(Respawn {})
-        .add(AreaOfEffect::new(RESPAWN_AQUIRE_RADIUS)),
+            level_id,
+            thing_id,
+        ),
+        ThingName::RespawnStone => respawn_thing(
+            assets,
+            world,
+            pos,
+            rotation,
+            "respawn-stone",
+            Material::Mud,
+            level_id,
+            thing_id,
+        ),
     }
 }
+fn respawn_thing(
+    assets: &Assets,
+    world: &mut World,
+    target_pos: Vec2,
+    rotation: f32,
+    texture: &str,
+    material: Material,
+    level_id: LevelId,
+    thing_id: ThingId,
+) -> EntityBuilder {
+    let down_dir = Vec2::from_angle(rotation).rotate(vec2(0.0, 1.0));
+    let offset = down_dir * RESPAWN_INACTIVE_OFFSET;
+    let starts_active = world.player.all_respawns().contains(&(level_id, thing_id));
+    let light = load_light(
+        assets,
+        &texture,
+        if starts_active {
+            LightState::Ripple(RippleState { strength: 1.0 })
+        } else {
+            LightState::Flicker(FlickerState::Off)
+        },
+    );
+    basic_thing_ex(
+        assets,
+        world,
+        target_pos,
+        rotation,
+        texture,
+        material,
+        BasicThingParams {
+            // light: LightRepr::DefaultFile,
+            ..Default::default()
+        },
+    )
+    .add(light)
+    .add(ThingDraw {
+        texture: texture.to_owned(),
+        offset: if starts_active { Vec2::ZERO } else { offset },
+    })
+    .add(Respawn {
+        active: if starts_active {
+            RespawnActive::Active(Transition::End)
+        } else {
+            RespawnActive::Inactive
+        },
+        target_pos,
+        offset,
+    })
+    .add(AreaOfEffect::new(RESPAWN_AQUIRE_RADIUS))
+}
 
-pub struct Respawn {}
+#[derive(Debug, Clone)]
+pub struct Respawn {
+    pub active: RespawnActive,
+    pub target_pos: Vec2,
+    pub offset: Vec2,
+}
+
+#[derive(Debug, Clone)]
+pub enum RespawnActive {
+    Inactive,
+    Active(Transition),
+}
 
 pub struct AreaOfEffect {
     pub radius: f32,
@@ -160,7 +244,6 @@ impl UsizeShapeSize {
 #[derive(Clone)]
 pub struct BasicThingParams {
     pub collider: ColliderRepr,
-    pub light: LightRepr,
     pub lazy: bool,
 }
 
@@ -168,7 +251,6 @@ impl std::default::Default for BasicThingParams {
     fn default() -> Self {
         Self {
             collider: ColliderRepr::DefaultFile,
-            light: LightRepr::None,
             lazy: true,
         }
     }
@@ -208,6 +290,7 @@ fn basic_thing_ex(
         .add(body_handle)
         .add(ThingDraw {
             texture: texture.to_owned(),
+            ..Default::default()
         })
         .add(material);
 
@@ -239,34 +322,7 @@ fn basic_thing_ex(
         }
     }
 
-    let light = match ex.light {
-        LightRepr::DefaultFile => Some(load_light(assets, &texture)),
-        LightRepr::File(light_file) => Some(load_light(assets, &light_file)),
-        LightRepr::Raw(light) => Some(light),
-        LightRepr::None => None,
-    };
-    if let Some(light) = light {
-        builder = builder.add(light);
-    }
     builder
-}
-fn basic_thing(
-    assets: &Assets,
-    world: &mut World,
-    pos: Vec2,
-    rotation: f32,
-    texture: &str,
-    material: Material,
-) -> EntityBuilder {
-    basic_thing_ex(
-        assets,
-        world,
-        pos,
-        rotation,
-        texture,
-        material,
-        BasicThingParams::default(),
-    )
 }
 
 fn basic_marker(pos: Vec2) -> EntityBuilder {
@@ -276,6 +332,15 @@ fn basic_marker(pos: Vec2) -> EntityBuilder {
 #[derive(Debug, Clone)]
 pub struct ThingDraw {
     pub texture: String,
+    pub offset: Vec2,
+}
+impl Default for ThingDraw {
+    fn default() -> Self {
+        ThingDraw {
+            texture: "stone".to_owned(),
+            offset: Vec2::ZERO,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -322,7 +387,7 @@ impl ThingInfo {
         }
     }
 }
-#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
 pub struct ThingId(pub usize);
 
 pub fn spawn_thing(
@@ -332,13 +397,22 @@ pub fn spawn_thing(
     level: LevelId,
     thing_id: ThingId,
     pos: Vec2,
+    draw_layer: DrawLayer,
 ) {
     let Some(name) = thing_info_to_name(thing_info.clone()) else {
         return;
     };
-    let mut entity =
-        thing_name_to_entity(assets, world, name, thing_info.pos + pos, thing_info.rotate)
-            .add(level)
-            .add(thing_id);
+    let mut entity = thing_name_to_entity(
+        assets,
+        world,
+        name,
+        thing_info.pos + pos,
+        thing_info.rotate,
+        level,
+        thing_id,
+    )
+    .add(level)
+    .add(thing_id)
+    .add(draw_layer);
     world.entities.spawn(entity.build());
 }

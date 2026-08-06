@@ -1,9 +1,9 @@
 use crate::{
     consts::*,
-    game::{assets::Assets, Settings},
+    game::{Settings, assets::Assets},
 };
 
-use super::{life_state::LifeState, light::LightGroup, polygon::three_points_rect, World};
+use super::{World, life_state::LifeState, light::LightGroup, polygon::three_points_rect};
 use macroquad::prelude::*;
 use rapier2d::dynamics::RigidBodyHandle;
 
@@ -267,9 +267,9 @@ fn draw_light(world: &World) {
         let body = world.physics_world.get_body(*body).unwrap();
         let pos = Vec2::from(body.position().translation.vector);
         let angle = body.position().rotation.angle();
-        for (light, strength) in &light.lights {
+        for (light, light_state) in &light.lights {
             let pos = pos + light.pos.rotate(Vec2::from_angle(angle));
-            let color = Color::new(1.0, 1.0, 1.0, *strength);
+            let color = Color::new(1.0, 1.0, 1.0, light_state.strength());
             draw_circle(pos.x, pos.y, light.radius, color);
         }
     }

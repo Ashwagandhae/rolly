@@ -4,6 +4,7 @@ use super::life_state::LifeState;
 use super::physics_world::PhysicsWorld;
 use super::thing::ThingId;
 use crate::consts::*;
+use egui_macroquad::egui::epaint::ahash::HashSet;
 use macroquad::prelude::*;
 use rapier2d::prelude::*;
 
@@ -174,7 +175,8 @@ pub struct Player {
     pub rolly_polly_transition: Transition,
     pub eye_x: Tween,
     pub life_state: LifeState,
-    pub respawn: (LevelId, ThingId),
+    respawn: (LevelId, ThingId),
+    all_respawns: HashSet<(LevelId, ThingId)>,
 }
 impl Player {
     pub fn spawn(physics_world: &mut PhysicsWorld) -> Self {
@@ -192,6 +194,7 @@ impl Player {
 
         let life_state = LifeState::Dead(Transition::End);
         let respawn = (LevelId::first(), ThingId(0));
+        let all_respawns = HashSet::from_iter([respawn]);
 
         Self {
             direction,
@@ -200,10 +203,21 @@ impl Player {
             eye_x,
             life_state,
             respawn,
+            all_respawns,
         }
     }
     pub fn alive(&self) -> bool {
         matches!(self.life_state, LifeState::Alive(Transition::End))
+    }
+    pub fn respawn(&self) -> (LevelId, ThingId) {
+        self.respawn
+    }
+    pub fn all_respawns(&self) -> &HashSet<(LevelId, ThingId)> {
+        &self.all_respawns
+    }
+    pub fn set_respawn(&mut self, respawn: (LevelId, ThingId)) {
+        self.respawn = respawn;
+        self.all_respawns.insert(respawn);
     }
     /// reset everything except life_state, respawn, and any physics_world state
     pub fn reset(&mut self, physics_world: &mut PhysicsWorld) {

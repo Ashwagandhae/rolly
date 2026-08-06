@@ -1,12 +1,14 @@
+use super::World;
 use super::draw::floor::{LiquidDraw, TiledDraw};
 use super::draw::pixel_to_meter;
 use super::level::LevelId;
 use super::polygon::{
     add_rect_padding, get_rect_offset_under_polygon_edge, trimesh_from_polygon, two_points_rect,
 };
-use super::World;
 use crate::consts::*;
 use crate::game::assets::Assets;
+use crate::game::world::level::DrawLayer;
+use hecs::EntityBuilder;
 use itertools::Itertools;
 use macroquad::prelude::*;
 use rapier2d::prelude::*;
@@ -17,6 +19,7 @@ pub enum Material {
     Stone,
     Water,
     Mud,
+    Fern,
 }
 
 fn with_alpha(color: Color, alpha: f32) -> Color {
@@ -26,7 +29,7 @@ fn with_alpha(color: Color, alpha: f32) -> Color {
 impl Material {
     pub fn rigid(self) -> bool {
         match self {
-            Self::Grass | Self::Stone | Self::Mud => true,
+            Self::Grass | Self::Stone | Self::Mud | Self::Fern => true,
             Self::Water => false,
         }
     }
@@ -36,6 +39,8 @@ impl Material {
             0x1E7EB4 => Self::Water,
             0x495380 => Self::Stone,
             0x63403D => Self::Mud,
+            0x49A16F => Self::Fern,
+
             _ => panic!("unknown floor color: {:x}", hex_color),
         }
     }
@@ -71,6 +76,16 @@ impl Material {
                 ],
                 vertices,
             )),
+            Self::Fern => VertexDraw::Tiled(TiledDraw::new(
+                assets,
+                "fern",
+                [
+                    Color::from_hex(0x6BB97C),
+                    Color::from_hex(0x42A183),
+                    Color::from_hex(0x2E8E8B),
+                ],
+                vertices,
+            )),
             Self::Water => VertexDraw::Liquid(LiquidDraw::new(
                 vertices,
                 with_alpha(Color::from_hex(0x1667B1), 0.7),
@@ -92,6 +107,7 @@ pub fn spawn_floor(
     material: Material,
     level: LevelId,
     pos: Vec2,
+    draw_layer: DrawLayer,
 ) {
     let vertices = vertices.iter().map(|v| *v + pos).collect::<Vec<_>>();
 
@@ -104,7 +120,7 @@ pub fn spawn_floor(
     );
     world
         .entities
-        .spawn((body_handle, vertex_draw, material, level));
+        .spawn((body_handle, vertex_draw, material, level, draw_layer));
 
     if material.rigid() {
         for (rect, builder) in polygon_colliders_from_rects(&vertices) {
