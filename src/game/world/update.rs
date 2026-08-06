@@ -161,7 +161,7 @@ fn respawn_transition(world: &mut World) {
                     continue;
                 }
                 transition.tick(get_frame_time());
-                let new_offset = respawn.offset * transition.get();
+                let new_offset = respawn.offset * simple_easing::quart_in(transition.get());
                 draw.offset = new_offset;
                 if transition.get() <= 0.0 {
                     for (_, state) in light_group.lights.iter_mut() {
