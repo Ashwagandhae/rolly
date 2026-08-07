@@ -2,7 +2,7 @@ use macroquad::prelude::*;
 pub mod consts;
 pub mod game;
 
-use game::{tick, Game};
+use game::{Game, tick};
 
 use crate::game::config::GameConfig;
 
@@ -30,7 +30,7 @@ fn get_config() -> GameConfig {
 async fn main() {
     let mut game = Game::new(get_config()).await;
     loop {
-        tick(&mut game);
+        tick(&mut game).await;
         next_frame().await;
         if game.quit() {
             break;

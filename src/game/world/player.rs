@@ -43,6 +43,7 @@ impl Polly {
                 .build(),
             ColliderBuilder::capsule_x(0.05, 0.05)
                 .friction(PLAYER_FRICTION)
+                .active_events(ActiveEvents::CONTACT_FORCE_EVENTS)
                 .friction_combine_rule(CoefficientCombineRule::Max)
                 .build(),
         );
@@ -103,6 +104,7 @@ impl Rolly {
                 .build(),
             ColliderBuilder::ball(0.075)
                 .friction(PLAYER_FRICTION)
+                .active_events(ActiveEvents::CONTACT_FORCE_EVENTS)
                 .friction_combine_rule(CoefficientCombineRule::Max)
                 .build(),
         );

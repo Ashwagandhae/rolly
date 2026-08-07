@@ -1,6 +1,6 @@
 use crate::{
     consts::*,
-    game::{Settings, assets::Assets},
+    game::{Settings, assets::Assets, world::level::LevelId},
 };
 
 use super::{World, life_state::LifeState, light::LightGroup, polygon::three_points_rect};
@@ -27,13 +27,23 @@ pub fn draw_texture_centered(
     rotation: f32,
     params: Option<DrawTextureParams>,
 ) {
+    draw_texture_centered_with_color(assets, texture_file, pos, rotation, WHITE, params);
+}
+pub fn draw_texture_centered_with_color(
+    assets: &Assets,
+    texture_file: &str,
+    pos: Vec2,
+    rotation: f32,
+    color: Color,
+    params: Option<DrawTextureParams>,
+) {
     let (size, texture) = &assets[texture_file];
     let size = Vec2::new(pixel_to_meter(size.0 as f32), pixel_to_meter(size.1 as f32));
     draw_texture_ex(
         *texture,
         pos.x - size.x / 2.0,
         pos.y - size.y / 2.0,
-        WHITE,
+        color,
         DrawTextureParams {
             dest_size: Some(size),
             rotation,
@@ -132,43 +142,63 @@ fn draw_back(_settings: &Settings, assets: &Assets, world: &World) {
         ((Some("sky_up"), "sky", None), 0.2),
         ((None, "hills", Some("hills_down")), 0.4),
     ];
-    for &((up_texture, texture, down_texture), zoom) in back_items {
-        let size = {
-            let size = assets[texture].0;
-            vec2(pixel_to_meter(size.0 as f32), pixel_to_meter(size.1 as f32))
-        };
-        let y = parallax(zoom, 3.0, world.camera.target.y);
-        for x in tiled_parallax_x(world, zoom, size.x, 0.0) {
-            let pos = Vec2::new(x, y);
-            draw_texture_centered(assets, texture, pos, 0.0, None);
-        }
-        if let Some(up_texture) = up_texture {
-            let size_up = {
-                let size = assets[up_texture].0;
-                vec2(pixel_to_meter(size.0 as f32), pixel_to_meter(size.1 as f32))
-            };
-            for y_up in tiled_parallax_y(world, zoom, size_up.y, 0.0) {
-                if y_up + size_up.y * 2.1 >= y {
-                    break;
-                }
-                for x_up in tiled_parallax_x(world, zoom, size_up.x, 0.0) {
-                    let pos = Vec2::new(x_up, y_up);
-                    draw_texture_centered(assets, up_texture, pos, 0.0, None);
+    let level_texture = |level: LevelId, texture_postfix: &str| -> String {
+        format!("{}_{}", level.0, texture_postfix)
+    };
+    let (previous, target_alpha, target) = world.back.render();
+    let level_alphas = if target_alpha == 1.0 {
+        vec![(target, 1.0)]
+    } else {
+        vec![(previous, 1.0), (target, target_alpha)]
+    };
+    for (level, alpha) in &level_alphas {
+        for &((up_postfix, middle_postfix, down_postfix), zoom) in back_items {
+            let color = Color::new(1.0, 1.0, 1.0, *alpha);
+            let texture = level_texture(*level, middle_postfix);
+            let size = assets.texture_size(&texture).unwrap();
+            let y = parallax(zoom, 3.0, world.camera.target.y);
+            for x in tiled_parallax_x(world, zoom, size.x, 0.0) {
+                let pos = Vec2::new(x, y);
+                draw_texture_centered_with_color(assets, &texture, pos, 0.0, color, None);
+            }
+            if let Some(up_texture) = up_postfix {
+                let up_texture = level_texture(*level, up_texture);
+                let size_up = assets.texture_size(&up_texture).unwrap();
+                for y_up in tiled_parallax_y(world, zoom, size_up.y, 0.0) {
+                    if y_up + size_up.y * 2.1 >= y {
+                        break;
+                    }
+                    for x_up in tiled_parallax_x(world, zoom, size_up.x, 0.0) {
+                        let pos = Vec2::new(x_up, y_up);
+                        draw_texture_centered_with_color(
+                            assets,
+                            &up_texture,
+                            pos,
+                            0.0,
+                            color,
+                            None,
+                        );
+                    }
                 }
             }
-        }
-        if let Some(down_texture) = down_texture {
-            let size_down = {
-                let size = assets[down_texture].0;
-                vec2(pixel_to_meter(size.0 as f32), pixel_to_meter(size.1 as f32))
-            };
-            for y_down in tiled_parallax_y(world, zoom, size_down.y, -size_down.y / 2.0).rev() {
-                if y_down - size_down.y * 2.0 <= y {
-                    break;
-                }
-                for x_down in tiled_parallax_x(world, zoom, size_down.x, 0.0) {
-                    let pos = Vec2::new(x_down, y_down);
-                    draw_texture_centered(assets, down_texture, pos, 0.0, None);
+            if let Some(down_texture) = down_postfix {
+                let down_texture = level_texture(*level, down_texture);
+                let size_down = assets.texture_size(&down_texture).unwrap();
+                for y_down in tiled_parallax_y(world, zoom, size_down.y, -size_down.y / 2.0).rev() {
+                    if y_down - size_down.y * 2.0 <= y {
+                        break;
+                    }
+                    for x_down in tiled_parallax_x(world, zoom, size_down.x, 0.0) {
+                        let pos = Vec2::new(x_down, y_down);
+                        draw_texture_centered_with_color(
+                            assets,
+                            &down_texture,
+                            pos,
+                            0.0,
+                            color,
+                            None,
+                        );
+                    }
                 }
             }
         }
@@ -269,6 +299,15 @@ fn draw_light(world: &World) {
         let angle = body.position().rotation.angle();
         for (light, light_state) in &light.lights {
             let pos = pos + light.pos.rotate(Vec2::from_angle(angle));
+            let rect = Rect::new(
+                pos.x - light.radius,
+                pos.y - light.radius,
+                light.radius * 2.0,
+                light.radius * 2.0,
+            );
+            if !get_camera_rect(world).overlaps(&rect) {
+                continue;
+            }
             let color = Color::new(1.0, 1.0, 1.0, light_state.strength());
             draw_circle(pos.x, pos.y, light.radius, color);
         }

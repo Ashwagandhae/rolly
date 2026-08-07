@@ -8,7 +8,7 @@ pub mod settings;
 use self::settings::SettingKindMut;
 
 use super::world::World;
-use super::{save_world, Game, Screen};
+use super::{Game, Screen, save_world};
 use settings::{Setting, SettingInfo, Settings, Slider, Toggle};
 
 const MARGIN: f32 = 10.0;
@@ -140,7 +140,7 @@ fn home(game: &mut Game) {
 }
 
 fn new_world(game: &mut Game) {
-    game.world = Some(World::new(&game.settings, &game.assets, &game.config));
+    game.world = Some(World::new(&game.settings, &mut game.assets, &game.config));
 }
 
 fn draw_label(ui: &mut Ui, setting: &Setting<impl SettingInfo>) {

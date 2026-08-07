@@ -2,7 +2,7 @@ use macroquad::prelude::*;
 
 use crate::{
     consts::{LIGHT_FLICKER_GROW_SPEED, LIGHT_FLICKER_INTERVAL},
-    game::assets::Assets,
+    game::{assets::Assets, world::draw::pixel_to_meter},
 };
 
 use super::svg::{SvgShape, read_svg};
@@ -12,7 +12,19 @@ pub struct Light {
     pub pos: Vec2,
     pub radius: f32,
 }
-pub struct LightRipple {}
+#[derive(Debug, Clone)]
+pub struct Ripple {
+    pub pos: Vec2,
+    pub radius: f32,
+}
+impl Ripple {
+    pub fn new(pos: Vec2) -> Self {
+        Self {
+            pos,
+            radius: pixel_to_meter(10.0),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct LightGroup {
@@ -33,9 +45,20 @@ pub enum FlickerState {
 pub struct RippleState {
     pub strength: f32,
 }
+#[derive(Debug, Clone)]
+pub struct RippleSource {
+    pub just_contacted: bool,
+}
 impl RippleState {
-    pub fn update(&mut self, dt: f32) {
-        self.strength += LIGHT_FLICKER_GROW_SPEED * dt;
+    pub fn update(&mut self, dt: f32, pos: Vec2, ripples: &[Ripple]) {
+        let rippled = ripples
+            .iter()
+            .any(|ripple| (pos.distance(ripple.pos) - ripple.radius).abs() < pixel_to_meter(30.0));
+        self.strength += if rippled {
+            -LIGHT_FLICKER_GROW_SPEED * dt
+        } else {
+            LIGHT_FLICKER_GROW_SPEED * dt
+        };
         self.strength = self.strength.clamp(0.0, 1.0);
     }
 }

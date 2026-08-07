@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use crate::game::{config::GameConfig, world::level::LevelId};
+use crate::game::{
+    config::GameConfig,
+    world::{back::Back, level::LevelId},
+};
 
 use self::level::load_level;
 
@@ -14,6 +17,7 @@ pub mod player;
 use player::Player;
 
 use super::{assets::Assets, ui::settings::Settings};
+pub mod back;
 pub mod collider;
 pub mod draw;
 pub mod frame;
@@ -31,10 +35,11 @@ pub struct World {
     pub camera: Camera2D,
     pub physics_world: PhysicsWorld,
     pub levels: HashMap<LevelId, Vec2>,
+    pub back: Back,
 }
 
 impl World {
-    pub fn new(settings: &Settings, assets: &Assets, config: &GameConfig) -> Self {
+    pub fn new(settings: &Settings, assets: &mut Assets, config: &GameConfig) -> Self {
         println!("Loading world...");
         let mut physics_world = PhysicsWorld::new();
         let camera = Camera2D {
@@ -47,17 +52,19 @@ impl World {
 
         let levels = HashMap::new();
 
+        let start_level = LevelId(0);
+        let back = Back::new(start_level);
+
         let mut world = Self {
             player,
             entities,
             camera,
             physics_world,
             levels,
+            back,
         };
 
-        load_level(assets, &mut world, LevelId(0));
-
-        update::update(assets, settings, &mut world, config);
+        load_level(assets, &mut world, start_level);
 
         world
     }

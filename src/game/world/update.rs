@@ -1,4 +1,5 @@
 use std::f32::consts::PI;
+use std::ops::Deref;
 
 use super::draw::{get_camera_rect, pixel_to_meter};
 use super::floor::{LazyCollider, Material};
@@ -17,13 +18,19 @@ use crate::consts::*;
 use crate::game::Settings;
 use crate::game::assets::Assets;
 use crate::game::config::GameConfig;
-use crate::game::world::light::{LightState, RippleState};
+use crate::game::world::light::{LightState, Ripple, RippleSource, RippleState};
 use crate::game::world::thing::{Mushroom, RespawnActive, ThingDraw};
 use macroquad::prelude::*;
-use nalgebra::UnitComplex;
+use nalgebra::{Point2, UnitComplex};
+use ordered_float::OrderedFloat;
 use rapier2d::prelude::*;
 
-pub fn update(assets: &Assets, settings: &Settings, world: &mut World, config: &GameConfig) {
+pub async fn update(
+    assets: &mut Assets,
+    settings: &Settings,
+    world: &mut World,
+    config: &GameConfig,
+) {
     update_camera(settings, world);
 
     update_loaded_levels_alive(assets, world);
@@ -34,9 +41,11 @@ pub fn update(assets: &Assets, settings: &Settings, world: &mut World, config: &
     player_body(world);
     player_water(world);
     player_mushroom(world);
+    update_ripple_source(world);
     player_fall(world);
     if config.cheat {
         player_cheat_movement(world);
+        player_cheat_assets(assets, world).await;
     }
 
     player_transition(world);
@@ -45,12 +54,63 @@ pub fn update(assets: &Assets, settings: &Settings, world: &mut World, config: &
     player_respawn(world);
 
     update_life_state(assets, world);
+    update_back(world, assets);
     update_light(world);
+    update_ripple(world);
 
     match world.player.body {
         Body::Rolly(_) => {}
         Body::Polly(_) => player_polly(world),
     }
+}
+fn update_ripple_source(world: &mut World) {
+    let mut ripples = Vec::new();
+    let player_pos = Vec2::from(get_player_body(world).position().translation);
+    for (_, (handle, source)) in world
+        .entities
+        .query_mut::<(&RigidBodyHandle, &mut RippleSource)>()
+    {
+        let body = world.physics_world.rigid_body_set.get(*handle).unwrap();
+        let contact = body
+            .colliders()
+            .iter()
+            .flat_map(|collider| {
+                world
+                    .physics_world
+                    .narrow_phase
+                    .contact_pairs_with(*collider)
+            })
+            .filter(|pair| pair.has_any_active_contact)
+            .next();
+        if !source.just_contacted {
+            if contact.is_some() {
+                ripples.push(Ripple::new(player_pos));
+            }
+        }
+        source.just_contacted = contact.is_some();
+    }
+    for ripple in ripples {
+        world.entities.spawn((ripple,));
+    }
+}
+fn update_ripple(world: &mut World) {
+    let mut remove = Vec::new();
+    for (id, ripple) in world.entities.query_mut::<&mut Ripple>() {
+        ripple.radius += 0.5 * get_frame_time();
+        if ripple.radius >= 1.0 {
+            remove.push(id)
+        }
+    }
+    for id in remove {
+        world.entities.despawn(id).unwrap();
+    }
+}
+fn get_contact_pair_pos(physics_world: &PhysicsWorld, contact_pair: &ContactPair) -> Option<Vec2> {
+    let collider = physics_world.collider_set.get(contact_pair.collider1)?;
+    let local_point = contact_pair.manifolds.get(0)?.points.get(0)?.local_p1;
+    let position = collider.position();
+    let global_point = position.transform_point(&local_point);
+    Some(global_point.into())
 }
 
 fn update_camera(settings: &Settings, world: &mut World) {
@@ -204,12 +264,60 @@ fn player_cheat_movement(world: &mut World) {
         pos.translation.x -= CHEAT_MOVE_SPEED;
         used = true;
     }
+
+    if is_key_pressed(KeyCode::RightBracket) {
+        if let Some(respawn_pos) =
+            find_closest_respawn(world, pos.translation.into(), |respawn_pos| {
+                respawn_pos.x > pos.translation.x + pixel_to_meter(50.0)
+            })
+        {
+            pos.translation = respawn_pos.into();
+            used = true;
+        }
+    }
+    if is_key_pressed(KeyCode::LeftBracket) {
+        if let Some(respawn_pos) =
+            find_closest_respawn(world, pos.translation.into(), |respawn_pos| {
+                respawn_pos.x < pos.translation.x - pixel_to_meter(50.0)
+            })
+        {
+            pos.translation = respawn_pos.into();
+            used = true;
+        }
+    }
+    let rigid_body = world.physics_world.get_body_mut(handle).unwrap();
     if used {
         rigid_body.set_position(pos, true);
         rigid_body.set_linvel(Vec2::ZERO.into(), true);
     }
 }
-
+async fn player_cheat_assets(assets: &mut Assets, world: &mut World) {
+    if is_key_pressed(KeyCode::P) {
+        println!("reloading assets...");
+        *assets = Assets::new().await;
+        for (level, _) in world.levels.clone() {
+            unload_level(world, level);
+            load_level(assets, world, level);
+        }
+    }
+}
+fn find_closest_respawn(world: &World, pos: Vec2, filt: impl Fn(&Vec2) -> bool) -> Option<Vec2> {
+    world
+        .entities
+        .query::<(&Respawn, &RigidBodyHandle)>()
+        .iter()
+        .map(|(_, (_, handle))| {
+            world
+                .physics_world
+                .get_body(*handle)
+                .unwrap()
+                .position()
+                .translation
+        })
+        .map(Vec2::from)
+        .filter(filt)
+        .min_by_key(|respawn_pos| OrderedFloat::from(respawn_pos.distance_squared(pos)))
+}
 fn player_movement(world: &mut World) {
     let alive = if let LifeState::Alive(Transition::End) = world.player.life_state {
         true
@@ -543,18 +651,47 @@ fn update_lazy_collider(world: &mut World) {
 }
 
 fn update_light(world: &mut World) {
-    let body = get_player_body(world);
     // let player_pos: Vec2 = (*body.translation()).into();
+    let ripples: Vec<_> = world
+        .entities
+        .query::<&Ripple>()
+        .iter()
+        .map(|(_, r)| r)
+        .cloned()
+        .collect();
     for (_, (body, light_group)) in world
         .entities
         .query::<(&RigidBodyHandle, &mut LightGroup)>()
         .iter()
     {
-        for (_, light_state) in light_group.lights.iter_mut() {
+        let body = world.physics_world.get_body(*body).unwrap();
+        let pos = Vec2::from(body.position().translation.vector);
+        let angle = body.position().rotation.angle();
+        for (light, light_state) in light_group.lights.iter_mut() {
+            let pos = pos + light.pos.rotate(Vec2::from_angle(angle));
             match light_state {
                 LightState::Flicker(flicker) => flicker.update(get_frame_time()),
-                LightState::Ripple(ripple) => ripple.update(get_frame_time()),
+                LightState::Ripple(ripple) => ripple.update(get_frame_time(), pos, &ripples),
             }
         }
+    }
+}
+fn update_back(world: &mut World, assets: &Assets) {
+    world.back.update(get_frame_time());
+    let player_pos = Vec2::from(get_player_body(world).position().translation);
+    let current_level = world
+        .levels
+        .iter()
+        .filter(|(level_id, level_pos)| {
+            let dims = assets.levels[&level_id.0].0.dims;
+            player_pos.x > level_pos.x
+                && player_pos.x < level_pos.x + dims.x
+                && player_pos.y > level_pos.y
+                && player_pos.y < level_pos.y + dims.y
+        })
+        .map(|(level_id, _)| *level_id)
+        .next();
+    if let Some(level) = current_level {
+        world.back.set_target(level);
     }
 }

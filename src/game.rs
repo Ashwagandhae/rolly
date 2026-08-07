@@ -8,7 +8,7 @@ use crate::game::config::GameConfig;
 use self::{assets::Assets, ui::settings::Settings};
 use macroquad::prelude::*;
 
-use world::{draw::draw as draw_world, update::update as update_world, World};
+use world::{World, draw::draw as draw_world, update::update as update_world};
 
 pub struct Game {
     pub assets: Assets,
@@ -39,10 +39,10 @@ impl Game {
     }
 }
 
-pub fn tick(game: &mut Game) {
+pub async fn tick(game: &mut Game) {
     if let Some(world) = &mut game.world {
         if let Screen::Running = game.screen {
-            update_world(&game.assets, &game.settings, world, &game.config);
+            update_world(&mut game.assets, &game.settings, world, &game.config).await;
         }
         draw_world(&game.settings, &game.assets, world);
     }

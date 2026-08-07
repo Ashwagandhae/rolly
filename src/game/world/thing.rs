@@ -6,7 +6,6 @@ use rapier2d::prelude::*;
 
 use super::{
     World,
-    draw::meter_to_pixel,
     floor::{LazyCollider, Material},
     level::LevelId,
     light::{FlickerState, LightGroup, LightState, load_light},
@@ -17,7 +16,11 @@ use crate::{
     game::{
         assets::Assets,
         world::{
-            collider, draw::pixel_to_meter, frame::Transition, level::DrawLayer, light::RippleState,
+            collider,
+            draw::pixel_to_meter,
+            frame::Transition,
+            level::DrawLayer,
+            light::{RippleSource, RippleState},
         },
     },
 };
@@ -54,9 +57,7 @@ pub fn thing_info_to_entity(
     };
     Some(match color {
         0x495380 => match shape_size {
-            Rect(size) if dbg!(size.x) >= pixel_to_meter(150.0) => {
-                t(world, "stone", Material::Stone)
-            }
+            Rect(size) if size.x >= pixel_to_meter(150.0) => t(world, "stone", Material::Stone),
             _ => t(world, "spike", Material::Stone),
         },
         0xCCCFAA => respawn_thing(
@@ -152,6 +153,9 @@ fn respawn_thing(
         },
         target_pos,
         offset,
+    })
+    .add(RippleSource {
+        just_contacted: false,
     })
     .add(AreaOfEffect::new(RESPAWN_AQUIRE_RADIUS))
 }

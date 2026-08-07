@@ -35,4 +35,5 @@ pub const LEVEL_X: f32 = 0.0;
 pub const LEVEL_Y: f32 = -3.0;
 
 pub const LIGHT_FLICKER_INTERVAL: f32 = 10.0;
-pub const LIGHT_FLICKER_GROW_SPEED: f32 = 3.0;
+pub const LIGHT_FLICKER_GROW_SPEED: f32 = 5.0;
+pub const BACKGROUND_TRANSITION_SPEED: f32 = 1.0;

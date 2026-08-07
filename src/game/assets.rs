@@ -2,6 +2,8 @@ use macroquad::prelude::*;
 use rustc_hash::FxHashMap as HashMap;
 use std::ops::RangeInclusive;
 
+use crate::game::world::draw::pixel_to_meter;
+
 use super::world::level::LevelInfo;
 
 type SizedTexture = ((usize, usize), Texture2D);
@@ -123,6 +125,13 @@ impl Assets {
     }
     pub fn get_mut(&mut self, index: &str) -> Option<&mut SizedTexture> {
         self.textures.get_mut(index)
+    }
+    pub fn texture_size(&self, name: &str) -> Option<Vec2> {
+        let size = self.textures.get(name)?.0;
+        Some(vec2(
+            pixel_to_meter(size.0 as f32),
+            pixel_to_meter(size.1 as f32),
+        ))
     }
 }
 
