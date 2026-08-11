@@ -62,6 +62,16 @@ pub fn thing_info_to_entity(
             }
             _ => vec![t(world, "spike", Material::Stone)],
         },
+
+        0x409F84 => vec![tx(
+            world,
+            "fern",
+            Material::Fern,
+            BasicThingParams {
+                collider: ColliderRepr::None,
+                ..Default::default()
+            },
+        )],
         0xCCCFAA => vec![respawn_thing(
             assets,
             world,
