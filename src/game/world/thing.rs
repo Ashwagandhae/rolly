@@ -121,6 +121,61 @@ pub fn thing_info_to_entity(
         _ => return None,
     })
 }
+fn create_bamboo_segment(
+    assets: &Assets,
+    world: &mut World,
+    pos: Vec2,
+    rotation: f32,
+    height: f32,
+    i: usize,
+    num_segments: usize,
+    prev_body_handle: Option<RigidBodyHandle>,
+) -> (EntityBuilder, RigidBodyHandle) {
+    let dir = vec2(0.0, -1.0).rotate(Vec2::from_angle(rotation));
+    let pos = pos - dir * height / 2.0 + dir * pixel_to_meter(BAMBOO_SEGMENT_HEIGHT) / 2.0;
+
+    let body = if prev_body_handle.is_some() {
+        RigidBodyBuilder::dynamic()
+    } else {
+        RigidBodyBuilder::fixed()
+    };
+    let body = body
+        .translation((pos + dir * pixel_to_meter(BAMBOO_SEGMENT_HEIGHT) * i as f32).into())
+        .rotation(rotation);
+    let body_handle = world.physics_world.add_body(body.build());
+    let mut builder = EntityBuilder::new()
+        .add(body_handle)
+        .add(ThingDraw {
+            texture: "bamboo".to_owned(),
+            ..Default::default()
+        })
+        .add(Material::Grass);
+
+    let (_, collider) = collider::load_collider(&assets, "bamboo");
+
+    let collider = environment_collider(collider, false);
+
+    let handle = world
+        .physics_world
+        .add_collider(collider.build(), body_handle);
+    builder = builder.add(handle);
+
+    if let Some(prev_body_handle) = prev_body_handle {
+        let anchor_fixed = point![0.0, pixel_to_meter(-110.0)];
+        let anchor_dynamic = point![0.0, pixel_to_meter(90.0)];
+        let joint_data = RevoluteJointBuilder::new()
+            .local_anchor1(anchor_fixed)
+            .local_anchor2(anchor_dynamic)
+            .motor_position(0.0, 3000.0 * (num_segments - i + 1) as f32, 500.0);
+        world.physics_world.impulse_joint_set.insert(
+            prev_body_handle,
+            body_handle,
+            joint_data,
+            true,
+        );
+    }
+    (builder, body_handle)
+}
 fn create_bamboo(
     assets: &Assets,
     world: &mut World,
@@ -128,86 +183,22 @@ fn create_bamboo(
     rotation: f32,
     height: f32,
 ) -> Vec<EntityBuilder> {
-    let dir = vec2(0.0, -1.0).rotate(Vec2::from_angle(rotation));
-    let pos = pos - dir * height / 2.0 + dir * pixel_to_meter(BAMBOO_SEGMENT_HEIGHT) / 2.0;
     let num_segments = (height / pixel_to_meter(BAMBOO_SEGMENT_HEIGHT)).floor() as usize;
-
+    let mut prev_body_handle = None;
     let mut res = Vec::new();
-    let base_body = RigidBodyBuilder::fixed()
-        .translation(pos.into())
-        .rotation(rotation);
-
-    let base_body_handle = world.physics_world.add_body(base_body.build());
-
-    let mut base_builder = EntityBuilder::new()
-        .add(base_body_handle)
-        .add(ThingDraw {
-            texture: "bamboo".to_owned(),
-            ..Default::default()
-        })
-        .add(Material::Grass);
-
-    let (_, base_collider) = collider::load_collider(&assets, "bamboo");
-
-    let base_collider = base_collider
-        .friction(PLATFORM_FRICTION)
-        .collision_groups(InteractionGroups::new(
-            COLLISION_LAYER_ENVIRONMENT.into(),
-            COLLISION_LAYER_PLAYER.into(),
-        ))
-        .friction_combine_rule(CoefficientCombineRule::Max);
-
-    let handle = world
-        .physics_world
-        .add_collider(base_collider.build(), base_body_handle);
-    base_builder = base_builder.add(handle);
-    res.push(base_builder);
-    let mut prev_body_handle = base_body_handle;
-    for i in 0..num_segments.saturating_sub(1) {
-        let body = RigidBodyBuilder::dynamic()
-            .translation(
-                (pos + dir * pixel_to_meter(BAMBOO_SEGMENT_HEIGHT) * (i + 1) as f32).into(),
-            )
-            .rotation(rotation);
-        let body_handle = world.physics_world.add_body(body.build());
-        let mut builder = EntityBuilder::new()
-            .add(body_handle)
-            .add(ThingDraw {
-                texture: "bamboo".to_owned(),
-                ..Default::default()
-            })
-            .add(Material::Grass);
-
-        let (_, collider) = collider::load_collider(&assets, "bamboo");
-
-        let collider = collider
-            .friction(PLATFORM_FRICTION)
-            .collision_groups(InteractionGroups::new(
-                COLLISION_LAYER_ENVIRONMENT.into(),
-                COLLISION_LAYER_PLAYER.into(),
-            ))
-            .friction_combine_rule(CoefficientCombineRule::Max);
-
-        let handle = world
-            .physics_world
-            .add_collider(collider.build(), body_handle);
-        builder = builder.add(handle);
-        let anchor_fixed = point![0.0, pixel_to_meter(-110.0)];
-
-        let anchor_dynamic = point![0.0, pixel_to_meter(90.0)];
-
-        let joint_data = RevoluteJointBuilder::new()
-            .local_anchor1(anchor_fixed)
-            .local_anchor2(anchor_dynamic)
-            .motor_position(0.0, 3000.0 * (num_segments - i) as f32, 500.0);
-        world.physics_world.impulse_joint_set.insert(
+    for i in 0..num_segments.max(1) {
+        let (builder, handle) = create_bamboo_segment(
+            assets,
+            world,
+            pos,
+            rotation,
+            height,
+            i,
+            num_segments,
             prev_body_handle,
-            body_handle,
-            joint_data,
-            true,
         );
-        res.push(builder);
-        prev_body_handle = body_handle;
+        prev_body_handle = Some(handle);
+        res.push(builder)
     }
     res
 }
@@ -376,17 +367,9 @@ fn basic_thing(
     };
 
     if let Some((rect, collider)) = collider {
-        let collider = collider
-            .friction(PLATFORM_FRICTION)
-            .friction_combine_rule(CoefficientCombineRule::Max)
-            .collision_groups(InteractionGroups::new(
-                COLLISION_LAYER_ENVIRONMENT.into(),
-                COLLISION_LAYER_PLAYER.into(),
-            ))
-            .sensor(!material.rigid());
+        let collider = environment_collider(collider, !material.rigid());
 
         if ex.lazy {
-            let rect = Rect::new(pos.x - rect.w / 2.0, pos.y - rect.h / 2.0, rect.w, rect.h);
             builder = builder.add(LazyCollider {
                 rect,
                 builder: collider,
@@ -402,9 +385,15 @@ fn basic_thing(
 
     builder
 }
-
-fn basic_marker(pos: Vec2) -> EntityBuilder {
-    EntityBuilder::new().add(pos)
+fn environment_collider(collider: ColliderBuilder, sensor: bool) -> ColliderBuilder {
+    collider
+        .friction(PLATFORM_FRICTION)
+        .friction_combine_rule(CoefficientCombineRule::Max)
+        .collision_groups(InteractionGroups::new(
+            COLLISION_LAYER_ENVIRONMENT.into(),
+            COLLISION_LAYER_PLAYER.into(),
+        ))
+        .sensor(sensor)
 }
 
 #[derive(Debug, Clone)]

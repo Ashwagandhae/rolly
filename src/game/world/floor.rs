@@ -180,6 +180,7 @@ fn polygon_colliders_from_rects(vertices: &[Vec2]) -> Vec<(Rect, ColliderBuilder
 }
 
 pub struct LazyCollider {
+    // Rect is positioned relative to rigid body pos
     pub rect: Rect,
     pub builder: ColliderBuilder,
     pub body_handle: RigidBodyHandle,

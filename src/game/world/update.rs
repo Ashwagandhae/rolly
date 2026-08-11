@@ -627,7 +627,18 @@ fn update_lazy_collider(world: &mut World) {
             w: LAZY_PLAYER_RECT,
             h: LAZY_PLAYER_RECT,
         };
-        let overlaps = player_rect.overlaps(&lazy_collider.rect);
+        let collider_body_pos = world
+            .physics_world
+            .get_body(lazy_collider.body_handle)
+            .unwrap()
+            .translation();
+        let collider_rect = Rect {
+            x: collider_body_pos.x + lazy_collider.rect.x,
+            y: collider_body_pos.y + lazy_collider.rect.y,
+            w: lazy_collider.rect.w,
+            h: lazy_collider.rect.h,
+        };
+        let overlaps = player_rect.overlaps(&collider_rect);
         if let Some(handle) = handle {
             if !overlaps {
                 world.physics_world.remove_collider(*handle);
