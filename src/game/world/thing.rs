@@ -143,10 +143,18 @@ fn create_bamboo_segment(
         .translation((pos + dir * pixel_to_meter(BAMBOO_SEGMENT_HEIGHT) * i as f32).into())
         .rotation(rotation);
     let body_handle = world.physics_world.add_body(body.build());
+    let big_leaf_cutoff = num_segments * 3 / 5;
+    let texture = if i < big_leaf_cutoff {
+        format!("bamboo{}", rand::gen_range(0, 1))
+    } else if i == big_leaf_cutoff {
+        format!("bamboo-leaf-small{}", rand::gen_range(0, 1))
+    } else {
+        format!("bamboo-leaf-big{}", rand::gen_range(0, 1))
+    };
     let mut builder = EntityBuilder::new()
         .add(body_handle)
         .add(ThingDraw {
-            texture: "bamboo".to_owned(),
+            texture,
             ..Default::default()
         })
         .add(Material::Grass);
@@ -186,6 +194,8 @@ fn create_bamboo(
     let num_segments = (height / pixel_to_meter(BAMBOO_SEGMENT_HEIGHT)).floor() as usize;
     let mut prev_body_handle = None;
     let mut res = Vec::new();
+    let seed = pos.x;
+    rand::srand(seed.to_bits() as u64);
     for i in 0..num_segments.max(1) {
         let (builder, handle) = create_bamboo_segment(
             assets,
