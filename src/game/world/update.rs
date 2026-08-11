@@ -18,6 +18,7 @@ use crate::consts::*;
 use crate::game::Settings;
 use crate::game::assets::Assets;
 use crate::game::config::GameConfig;
+use crate::game::world::level::load_level_at_pos;
 use crate::game::world::light::{LightState, Ripple, RippleSource, RippleState};
 use crate::game::world::thing::{Mushroom, RespawnActive, ThingDraw};
 use macroquad::prelude::*;
@@ -295,9 +296,9 @@ async fn player_cheat_assets(assets: &mut Assets, world: &mut World) {
     if is_key_pressed(KeyCode::P) {
         println!("reloading assets...");
         *assets = Assets::new().await;
-        for (level, _) in world.levels.clone() {
+        for (level, pos) in world.levels.clone() {
             unload_level(world, level);
-            load_level(assets, world, level);
+            load_level_at_pos(assets, world, level, pos);
         }
     }
 }

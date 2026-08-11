@@ -106,6 +106,10 @@ impl Rolly {
                 .friction(PLAYER_FRICTION)
                 .active_events(ActiveEvents::CONTACT_FORCE_EVENTS)
                 .friction_combine_rule(CoefficientCombineRule::Max)
+                .collision_groups(InteractionGroups::new(
+                    COLLISION_LAYER_PLAYER.into(),
+                    COLLISION_LAYER_ENVIRONMENT.into(),
+                ))
                 .build(),
         );
         Rolly {
@@ -181,7 +185,7 @@ pub struct Player {
     all_respawns: HashSet<(LevelId, ThingId)>,
 }
 impl Player {
-    pub fn spawn(physics_world: &mut PhysicsWorld) -> Self {
+    pub fn spawn(physics_world: &mut PhysicsWorld, level: LevelId) -> Self {
         let body = Body::Rolly(Rolly::spawn(
             physics_world,
             vec2(0.0, 0.0),
@@ -195,7 +199,7 @@ impl Player {
         let eye_x = Tween::new(1.0, 0.05);
 
         let life_state = LifeState::Dead(Transition::End);
-        let respawn = (LevelId::first(), ThingId(0));
+        let respawn = (level, ThingId(0));
         let all_respawns = HashSet::from_iter([respawn]);
 
         Self {

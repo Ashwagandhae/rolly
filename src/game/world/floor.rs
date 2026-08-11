@@ -8,7 +8,6 @@ use super::polygon::{
 use crate::consts::*;
 use crate::game::assets::Assets;
 use crate::game::world::level::DrawLayer;
-use hecs::EntityBuilder;
 use itertools::Itertools;
 use macroquad::prelude::*;
 use rapier2d::prelude::*;
@@ -169,6 +168,10 @@ fn polygon_colliders_from_rects(vertices: &[Vec2]) -> Vec<(Rect, ColliderBuilder
                 + Vec2::from_angle(rotation_down) * height / 2.0;
             let builder = ColliderBuilder::cuboid(distance_offset / 2.0, height / 2.0)
                 .translation(pos.into())
+                .collision_groups(InteractionGroups::new(
+                    COLLISION_LAYER_ENVIRONMENT.into(),
+                    COLLISION_LAYER_PLAYER.into(),
+                ))
                 .rotation(rotation);
             let rect = add_rect_padding(two_points_rect(v1, v2), pixel_to_meter(30.0));
             (rect, builder)

@@ -46,13 +46,13 @@ impl World {
             target: vec2(0.0, 3.0),
             ..Default::default()
         };
+        let start_level = LevelId(config.level.unwrap_or(0));
         let entities = HecsWorld::new();
 
-        let player = Player::spawn(&mut physics_world);
+        let player = Player::spawn(&mut physics_world, start_level);
 
         let levels = HashMap::new();
 
-        let start_level = LevelId(0);
         let back = Back::new(start_level);
 
         let mut world = Self {

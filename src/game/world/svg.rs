@@ -3,7 +3,7 @@ use std::f32::consts::PI;
 use macroquad::prelude::*;
 
 use crate::game::world::draw::pixel_to_meter;
-use crate::game::world::polygon::{vertices_to_clockwise, OrderedVec2};
+use crate::game::world::polygon::{OrderedVec2, vertices_to_clockwise};
 
 use indexmap::IndexSet;
 use xml::{
@@ -140,8 +140,8 @@ fn get_rotate(attributes: &[OwnedAttribute]) -> f32 {
 pub fn read_svg_rect(attributes: &[OwnedAttribute]) -> RectShape {
     let parse_attr = |name| parse_attr(name, attributes);
 
-    let x = parse_attr("x").expect("no x attribute");
-    let y = parse_attr("y").expect("no y attribute");
+    let x = parse_attr("x").unwrap_or(0.0);
+    let y = parse_attr("y").unwrap_or(0.0);
     let width = parse_attr("width").expect("no width attribute");
     let height = parse_attr("height").expect("no height attribute");
     let rotate = get_rotate(attributes);

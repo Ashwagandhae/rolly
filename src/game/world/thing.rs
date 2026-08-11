@@ -39,10 +39,10 @@ pub fn thing_info_to_entity(
     rotation: f32,
     level_id: LevelId,
     thing_id: ThingId,
-) -> Option<EntityBuilder> {
+) -> Option<Vec<EntityBuilder>> {
     use ThingInfoShapeSize::*;
     let t = |world: &mut World, texture: &str, material: Material| {
-        basic_thing_ex(
+        basic_thing(
             assets,
             world,
             pos,
@@ -53,14 +53,16 @@ pub fn thing_info_to_entity(
         )
     };
     let tx = |world: &mut World, texture: &str, material: Material, ex: BasicThingParams| {
-        basic_thing_ex(assets, world, pos, rotation, texture, material, ex)
+        basic_thing(assets, world, pos, rotation, texture, material, ex)
     };
     Some(match color {
         0x495380 => match shape_size {
-            Rect(size) if size.x >= pixel_to_meter(150.0) => t(world, "stone", Material::Stone),
-            _ => t(world, "spike", Material::Stone),
+            Rect(size) if size.x >= pixel_to_meter(150.0) => {
+                vec![t(world, "stone", Material::Stone)]
+            }
+            _ => vec![t(world, "spike", Material::Stone)],
         },
-        0xCCCFAA => respawn_thing(
+        0xCCCFAA => vec![respawn_thing(
             assets,
             world,
             pos,
@@ -69,8 +71,8 @@ pub fn thing_info_to_entity(
             Material::Grass,
             level_id,
             thing_id,
-        ),
-        0x938260 => respawn_thing(
+        )],
+        0x938260 => vec![respawn_thing(
             assets,
             world,
             pos,
@@ -79,8 +81,8 @@ pub fn thing_info_to_entity(
             Material::Mud,
             level_id,
             thing_id,
-        ),
-        0xAAC4CF => respawn_thing(
+        )],
+        0xAAC4CF => vec![respawn_thing(
             assets,
             world,
             pos,
@@ -89,22 +91,125 @@ pub fn thing_info_to_entity(
             Material::Stone,
             level_id,
             thing_id,
-        ),
-        0x93607A => tx(
+        )],
+        0xAACFB5 => vec![respawn_thing(
+            assets,
             world,
-            "mushroom",
-            Material::Mud,
-            BasicThingParams {
-                collider: ColliderRepr::DefaultFile,
-                ..Default::default()
-            },
-        )
-        .add(Mushroom {
-            touching_player: false,
+            pos,
             rotation,
-        }),
+            "respawn-fern",
+            Material::Fern,
+            level_id,
+            thing_id,
+        )],
+        0x93607A => vec![
+            tx(
+                world,
+                "mushroom",
+                Material::Mud,
+                BasicThingParams {
+                    collider: ColliderRepr::DefaultFile,
+                    ..Default::default()
+                },
+            )
+            .add(Mushroom {
+                touching_player: false,
+                rotation,
+            }),
+        ],
+        0x1C7D46 => create_bamboo(assets, world, pos, rotation, shape_size.height()),
         _ => return None,
     })
+}
+fn create_bamboo(
+    assets: &Assets,
+    world: &mut World,
+    pos: Vec2,
+    rotation: f32,
+    height: f32,
+) -> Vec<EntityBuilder> {
+    let dir = vec2(0.0, -1.0).rotate(Vec2::from_angle(rotation));
+    let pos = pos - dir * height / 2.0 + dir * pixel_to_meter(BAMBOO_SEGMENT_HEIGHT) / 2.0;
+    let num_segments = (height / pixel_to_meter(BAMBOO_SEGMENT_HEIGHT)).floor() as usize;
+
+    let mut res = Vec::new();
+    let base_body = RigidBodyBuilder::fixed()
+        .translation(pos.into())
+        .rotation(rotation);
+
+    let base_body_handle = world.physics_world.add_body(base_body.build());
+
+    let mut base_builder = EntityBuilder::new()
+        .add(base_body_handle)
+        .add(ThingDraw {
+            texture: "bamboo".to_owned(),
+            ..Default::default()
+        })
+        .add(Material::Grass);
+
+    let (_, base_collider) = collider::load_collider(&assets, "bamboo");
+
+    let base_collider = base_collider
+        .friction(PLATFORM_FRICTION)
+        .collision_groups(InteractionGroups::new(
+            COLLISION_LAYER_ENVIRONMENT.into(),
+            COLLISION_LAYER_PLAYER.into(),
+        ))
+        .friction_combine_rule(CoefficientCombineRule::Max);
+
+    let handle = world
+        .physics_world
+        .add_collider(base_collider.build(), base_body_handle);
+    base_builder = base_builder.add(handle);
+    res.push(base_builder);
+    let mut prev_body_handle = base_body_handle;
+    for i in 0..num_segments.saturating_sub(1) {
+        let body = RigidBodyBuilder::dynamic()
+            .translation(
+                (pos + dir * pixel_to_meter(BAMBOO_SEGMENT_HEIGHT) * (i + 1) as f32).into(),
+            )
+            .rotation(rotation);
+        let body_handle = world.physics_world.add_body(body.build());
+        let mut builder = EntityBuilder::new()
+            .add(body_handle)
+            .add(ThingDraw {
+                texture: "bamboo".to_owned(),
+                ..Default::default()
+            })
+            .add(Material::Grass);
+
+        let (_, collider) = collider::load_collider(&assets, "bamboo");
+
+        let collider = collider
+            .friction(PLATFORM_FRICTION)
+            .collision_groups(InteractionGroups::new(
+                COLLISION_LAYER_ENVIRONMENT.into(),
+                COLLISION_LAYER_PLAYER.into(),
+            ))
+            .friction_combine_rule(CoefficientCombineRule::Max);
+
+        let handle = world
+            .physics_world
+            .add_collider(collider.build(), body_handle);
+        builder = builder.add(handle);
+        let anchor_fixed = point![0.0, pixel_to_meter(-110.0)];
+
+        let anchor_dynamic = point![0.0, pixel_to_meter(90.0)];
+
+        let joint_data = RevoluteJointBuilder::new()
+            .local_anchor1(anchor_fixed)
+            .local_anchor2(anchor_dynamic)
+            .motor_position(0.0, 3000.0 * (num_segments - i) as f32, 500.0);
+        world.physics_world.impulse_joint_set.insert(
+            prev_body_handle,
+            body_handle,
+            joint_data,
+            true,
+        );
+        res.push(builder);
+        prev_body_handle = body_handle;
+    }
+    res
 }
 fn respawn_thing(
     assets: &Assets,
@@ -128,7 +233,7 @@ fn respawn_thing(
             LightState::Flicker(FlickerState::Off)
         },
     );
-    basic_thing_ex(
+    basic_thing(
         assets,
         world,
         target_pos,
@@ -240,7 +345,7 @@ impl EntityBuilder {
         self.0.build()
     }
 }
-fn basic_thing_ex(
+fn basic_thing(
     assets: &Assets,
     world: &mut World,
     pos: Vec2,
@@ -274,6 +379,10 @@ fn basic_thing_ex(
         let collider = collider
             .friction(PLATFORM_FRICTION)
             .friction_combine_rule(CoefficientCombineRule::Max)
+            .collision_groups(InteractionGroups::new(
+                COLLISION_LAYER_ENVIRONMENT.into(),
+                COLLISION_LAYER_PLAYER.into(),
+            ))
             .sensor(!material.rigid());
 
         if ex.lazy {
@@ -325,6 +434,20 @@ pub enum ThingInfoShapeSize {
     Rect(Vec2),
     Circle(f32),
 }
+impl ThingInfoShapeSize {
+    pub fn height(&self) -> f32 {
+        match self {
+            Self::Rect(vec) => vec.y,
+            Self::Circle(r) => r * 2.,
+        }
+    }
+    pub fn width(&self) -> f32 {
+        match self {
+            Self::Rect(vec) => vec.x,
+            Self::Circle(r) => r * 2.,
+        }
+    }
+}
 
 impl Mul<f32> for ThingInfoShapeSize {
     type Output = Self;
@@ -368,7 +491,7 @@ pub fn spawn_thing(
     pos: Vec2,
     draw_layer: DrawLayer,
 ) {
-    let Some(entity) = thing_info_to_entity(
+    let Some(entities) = thing_info_to_entity(
         assets,
         world,
         thing_info.size,
@@ -380,6 +503,8 @@ pub fn spawn_thing(
     ) else {
         return;
     };
-    let mut entity = entity.add(level).add(thing_id).add(draw_layer);
-    world.entities.spawn(entity.build());
+    for entity in entities {
+        let mut entity = entity.add(level).add(thing_id).add(draw_layer);
+        world.entities.spawn(entity.build());
+    }
 }
