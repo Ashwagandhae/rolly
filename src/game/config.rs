@@ -1,16 +1,23 @@
-use std::default::Default;
-
 #[cfg(not(target_arch = "wasm32"))]
 use argh::FromArgs;
 
-#[cfg_attr(not(target_arch = "wasm32"), derive(FromArgs))]
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(FromArgs)]
 /// Game configuration
 pub struct GameConfig {
-    #[cfg_attr(not(target_arch = "wasm32"), argh(switch))]
+    #[argh(switch)]
     /// whether or not cheats are on
     pub(crate) cheat: bool,
+    #[argh(option)]
+    /// level to start the game on
+    pub(crate) level: Option<usize>,
+}
 
-    #[cfg_attr(not(target_arch = "wasm32"), argh(option))]
+#[cfg(target_arch = "wasm32")]
+/// Game configuration
+pub struct GameConfig {
+    /// whether or not cheats are on
+    pub(crate) cheat: bool,
     /// level to start the game on
     pub(crate) level: Option<usize>,
 }
