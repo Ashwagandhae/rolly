@@ -10,7 +10,7 @@ use crate::game::world::level::DrawLayer;
 use crate::game::world::polygon::{
     add_rect_padding, get_rect_offset_under_polygon_edge, two_points_rect,
 };
-use crate::game::world::thing::ThingDraw;
+use crate::game::world::thing::{Flytrap, ThingDraw};
 use hecs::Or;
 use itertools::Itertools;
 use macroquad::prelude::*;
@@ -19,7 +19,11 @@ use rapier2d::dynamics::RigidBodyHandle;
 pub fn draw(assets: &Assets, world: &World) {
     for (_, (draw, body, _)) in world
         .entities
-        .query::<(Or<&VertexDraw, &ThingDraw>, &RigidBodyHandle, &DrawLayer)>()
+        .query::<(
+            Or<&VertexDraw, (&ThingDraw, Option<&Flytrap>)>,
+            &RigidBodyHandle,
+            &DrawLayer,
+        )>()
         .iter()
         .sorted_by_key(|(_, (_, _, draw_layer))| *draw_layer)
     {
@@ -33,8 +37,13 @@ pub fn draw(assets: &Assets, world: &World) {
                 }
             }
         }
-        if let Or::Right(thing_draw) | Or::Both(_, thing_draw) = draw {
-            draw_thing(assets, world, thing_draw, body);
+        if let Or::Right((thing_draw, flytrap)) | Or::Both(_, (thing_draw, flytrap)) = draw {
+            let drew = draw_thing(assets, world, thing_draw, body);
+            if drew {
+                if let Some(flytrap) = flytrap {
+                    draw_flytrap(assets, world, thing_draw, body, flytrap);
+                }
+            }
         }
     }
 }
@@ -199,16 +208,62 @@ pub fn draw_liquid(world: &World, liquid_draw: &LiquidDraw) {
     );
 }
 
-pub fn draw_thing(assets: &Assets, world: &World, thing_draw: &ThingDraw, body: &RigidBodyHandle) {
-    let body = world.physics_world.get_body(*body).unwrap();
-    let pos = Vec2::from(body.position().translation.vector) + thing_draw.offset;
-    let rotate = body.position().rotation.angle();
-    draw_texture_centered_lazy(
-        world,
+fn draw_thing(
+    assets: &Assets,
+    world: &World,
+    thing_draw: &ThingDraw,
+    body: &RigidBodyHandle,
+) -> bool {
+    let physics_body = world.physics_world.get_body(*body).unwrap();
+    let pos = Vec2::from(physics_body.position().translation.vector) + thing_draw.offset;
+    let angle = physics_body.position().rotation.angle();
+    draw_texture_centered_lazy(world, assets, thing_draw.texture.as_str(), pos, angle, None)
+}
+fn draw_flytrap(
+    assets: &Assets,
+    world: &World,
+    thing_draw: &ThingDraw,
+    body: &RigidBodyHandle,
+    flytrap: &Flytrap,
+) {
+    const TEETH_ROAD_LENGTH: f32 = 150.0;
+    const TEETH_SINK_START: f32 = 20.0;
+    const TEETH_SINK_END: f32 = 0.0;
+    const NUM_TEETH: usize = 8;
+
+    let physics_body = world.physics_world.get_body(*body).unwrap();
+    let pos = Vec2::from(physics_body.position().translation.vector) + thing_draw.offset;
+    let angle = physics_body.position().rotation.angle();
+
+    let dir_x = vec2(1.0, 0.0).rotate(Vec2::from_angle(angle));
+    let dir_y = vec2(0.0, 1.0).rotate(Vec2::from_angle(angle));
+
+    let first_tooth_pos = pos - pixel_to_meter(65.0) * dir_x - pixel_to_meter(25.0) * dir_y;
+
+    let progress = 1.0 - flytrap.teeth_x % 1.0;
+    for i in 0..NUM_TEETH {
+        let tooth_x_pos = (progress + i as f32 / NUM_TEETH as f32) % 1.0 * TEETH_ROAD_LENGTH;
+        let y_progress = if tooth_x_pos > TEETH_ROAD_LENGTH - TEETH_SINK_START {
+            1.0 - ((tooth_x_pos - (TEETH_ROAD_LENGTH - TEETH_SINK_START)) / TEETH_SINK_START)
+        } else if tooth_x_pos < TEETH_SINK_END {
+            tooth_x_pos / TEETH_SINK_END
+        } else {
+            1.0
+        };
+        let tooth_pos = first_tooth_pos
+            + pixel_to_meter(tooth_x_pos) * dir_x
+            + pixel_to_meter(30.0) * dir_y * (1.0 - y_progress);
+        let texture = format!("flytrap-tooth{}", i);
+        draw_texture_centered_lazy(world, assets, &texture, tooth_pos, angle, None);
+    }
+
+    draw_thing(
         assets,
-        thing_draw.texture.as_str(),
-        pos,
-        rotate,
-        None,
+        world,
+        &ThingDraw {
+            texture: "flytrap-front".to_owned(),
+            ..thing_draw.clone()
+        },
+        body,
     );
 }

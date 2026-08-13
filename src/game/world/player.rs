@@ -103,7 +103,7 @@ impl Rolly {
                 .can_sleep(false)
                 .build(),
             ColliderBuilder::ball(0.075)
-                .friction(PLAYER_FRICTION)
+                .friction(PLAYER_ROLL_FRICTION)
                 .active_events(ActiveEvents::CONTACT_FORCE_EVENTS)
                 .friction_combine_rule(CoefficientCombineRule::Max)
                 .collision_groups(InteractionGroups::new(
@@ -172,6 +172,12 @@ impl Body {
             Body::Polly(polly) => polly.despawn(physics_world),
             Body::Rolly(rolly) => rolly.despawn(physics_world),
         }
+    }
+    pub fn is_polly(&self) -> bool {
+        matches!(self, Body::Polly(_))
+    }
+    pub fn is_rolly(&self) -> bool {
+        matches!(self, Body::Rolly(_))
     }
 }
 

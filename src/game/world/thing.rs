@@ -29,6 +29,20 @@ pub struct Mushroom {
     pub touching_player: bool,
     pub rotation: f32,
 }
+pub struct Flytrap {
+    pub touching_player: bool,
+    pub teeth_x: f32,
+    pub teeth_speed: f32,
+}
+impl Flytrap {
+    fn new() -> Self {
+        Flytrap {
+            touching_player: false,
+            teeth_x: 0.0,
+            teeth_speed: 0.1,
+        }
+    }
+}
 
 pub fn thing_info_to_entity(
     assets: &Assets,
@@ -72,6 +86,12 @@ pub fn thing_info_to_entity(
                 ..Default::default()
             },
         )],
+        0x624FEC => match shape_size {
+            Rect(size) if size.x >= pixel_to_meter(155.0) => {
+                vec![t(world, "bird-of-paradise-big", Material::Fern)]
+            }
+            _ => vec![t(world, "bird-of-paradise-small", Material::Fern)],
+        },
         0xCCCFAA => vec![respawn_thing(
             assets,
             world,
@@ -127,6 +147,7 @@ pub fn thing_info_to_entity(
                 rotation,
             }),
         ],
+        0x964952 => vec![t(world, "flytrap", Material::Fern).add(Flytrap::new())],
         0x1C7D46 => create_bamboo(assets, world, pos, rotation, shape_size.height()),
         _ => return None,
     })
@@ -169,7 +190,7 @@ fn create_bamboo_segment(
         })
         .add(Material::Grass);
 
-    let (_, collider) = collider::load_collider(&assets, "bamboo");
+    let (_, collider) = collider::load_collider(&assets, "bamboo").unwrap();
 
     let collider = environment_collider(collider, false);
 
@@ -380,8 +401,8 @@ fn basic_thing(
         .add(material);
 
     let collider = match ex.collider {
-        ColliderRepr::DefaultFile => Some(collider::load_collider(assets, &texture)),
-        ColliderRepr::File(collider_file) => Some(collider::load_collider(assets, &collider_file)),
+        ColliderRepr::DefaultFile => collider::load_collider(assets, &texture),
+        ColliderRepr::File(collider_file) => collider::load_collider(assets, &collider_file),
         ColliderRepr::Raw(rect, builder) => Some((rect, builder)),
         ColliderRepr::None => None,
     };

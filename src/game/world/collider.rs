@@ -6,7 +6,7 @@ use crate::game::assets::Assets;
 
 use super::{
     polygon::trimesh_from_polygon,
-    svg::{read_svg, SvgShape},
+    svg::{SvgShape, read_svg},
 };
 
 pub fn shape_to_collider(shape: &SvgShape) -> (Isometry2<f32>, SharedShape) {
@@ -31,11 +31,8 @@ pub fn shape_to_collider(shape: &SvgShape) -> (Isometry2<f32>, SharedShape) {
     }
 }
 
-pub fn load_collider(assets: &Assets, collider: &str) -> (Rect, ColliderBuilder) {
-    let svg = &assets
-        .colliders
-        .get(collider)
-        .expect(&format!("missing collider for {}", collider));
+pub fn load_collider(assets: &Assets, collider: &str) -> Option<(Rect, ColliderBuilder)> {
+    let svg = &assets.colliders.get(collider)?;
     let (size, items) = read_svg(&svg);
     let translate = -size / 2.0;
     let shapes = items
@@ -45,5 +42,5 @@ pub fn load_collider(assets: &Assets, collider: &str) -> (Rect, ColliderBuilder)
         .collect::<Vec<_>>();
     let builder = ColliderBuilder::compound(shapes).translation(translate.into());
     let rect = Rect::new(-size.x / 2.0, -size.y / 2.0, size.x, size.y);
-    (rect, builder)
+    Some((rect, builder))
 }

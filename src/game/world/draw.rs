@@ -59,15 +59,16 @@ pub fn draw_texture_centered_lazy(
     pos: Vec2,
     rotation: f32,
     params: Option<DrawTextureParams>,
-) {
+) -> bool {
     let (size, _) = &assets[texture_file];
     let size =
         Vec2::new(pixel_to_meter(size.0 as f32), pixel_to_meter(size.1 as f32)) * 2.0f32.sqrt();
     let rect = Rect::new(pos.x - size.x / 2.0, pos.y - size.y / 2.0, size.x, size.y);
     if !get_camera_rect(world).overlaps(&rect) {
-        return;
+        return false;
     }
     draw_texture_centered(assets, texture_file, pos, rotation, params);
+    true
 }
 
 pub fn get_camera_zoom(world: &World) -> Vec2 {

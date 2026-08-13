@@ -20,7 +20,7 @@ use crate::game::assets::Assets;
 use crate::game::config::GameConfig;
 use crate::game::world::level::load_level_at_pos;
 use crate::game::world::light::{LightState, Ripple, RippleSource, RippleState};
-use crate::game::world::thing::{Mushroom, RespawnActive, ThingDraw};
+use crate::game::world::thing::{Flytrap, Mushroom, RespawnActive, ThingDraw};
 use macroquad::prelude::*;
 use nalgebra::{Point2, UnitComplex};
 use ordered_float::OrderedFloat;
@@ -42,6 +42,7 @@ pub async fn update(
     player_body(world);
     player_water(world);
     player_mushroom(world);
+    player_flytrap(world);
     update_ripple_source(world);
     player_fall(world);
     if config.cheat {
@@ -58,6 +59,7 @@ pub async fn update(
     update_back(world, assets);
     update_light(world);
     update_ripple(world);
+    update_flytrap_teeth(world);
 
     match world.player.body {
         Body::Rolly(_) => {}
@@ -106,12 +108,12 @@ fn update_ripple(world: &mut World) {
         world.entities.despawn(id).unwrap();
     }
 }
-fn get_contact_pair_pos(physics_world: &PhysicsWorld, contact_pair: &ContactPair) -> Option<Vec2> {
-    let collider = physics_world.collider_set.get(contact_pair.collider1)?;
-    let local_point = contact_pair.manifolds.get(0)?.points.get(0)?.local_p1;
-    let position = collider.position();
-    let global_point = position.transform_point(&local_point);
-    Some(global_point.into())
+fn update_flytrap_teeth(world: &mut World) {
+    for (_, flytrap) in world.entities.query::<&mut Flytrap>().iter() {
+        flytrap.teeth_x += get_frame_time() * flytrap.teeth_speed;
+        flytrap.teeth_speed =
+            (flytrap.teeth_speed - 1.5 * get_frame_time()).max(FLYTRAP_TEETH_SPEED);
+    }
 }
 
 fn update_camera(settings: &Settings, world: &mut World) {
@@ -373,8 +375,8 @@ fn player_movement(world: &mut World) {
         // let delta = angvel * 0.8 * get_frame_time();
         // angvel -= delta;
     } else if alive && !left_feet_grounded && !right_feet_grounded {
-        angvel = 0.0;
         // rotate towards 0
+        angvel = 0.0;
         rotation = rotation.slerp(&UnitComplex::new(0.), 0.3);
     }
     if alive {
@@ -600,7 +602,38 @@ fn player_mushroom(world: &mut World) {
     let body = get_player_body_mut(world);
     body.set_linvel(linvel.into(), true);
 }
-
+fn player_flytrap(world: &mut World) {
+    if !world.player.alive() {
+        return;
+    }
+    let body = get_player_body(world);
+    let mut angvel: f32 = body.angvel().clone().into();
+    let player_pos: Vec2 = (*body.translation()).into();
+    let player_is_rolly = world.player.body.is_rolly();
+    for (_, (flytrap, flytrap_handle)) in world
+        .entities
+        .query_mut::<(&mut Flytrap, &RigidBodyHandle)>()
+    {
+        let flytrap_body = world.physics_world.get_body(*flytrap_handle).unwrap();
+        let flytrap_pos: Vec2 = (*flytrap_body.translation()).into();
+        if player_pos.distance(flytrap_pos) < 0.2 {
+            if flytrap.touching_player {
+                continue;
+            }
+            flytrap.touching_player = true;
+            if player_is_rolly {
+                angvel = PLAYER_VEL_FLYTRAP;
+                flytrap.teeth_speed = 2.0;
+            } else {
+                flytrap.teeth_speed = 1.0;
+            }
+        } else {
+            flytrap.touching_player = false;
+        }
+    }
+    let body = get_player_body_mut(world);
+    body.set_angvel(angvel.into(), true);
+}
 fn player_fall(world: &mut World) {
     if !world.player.alive() {
         return;
