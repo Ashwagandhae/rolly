@@ -17,6 +17,12 @@ pub struct PhysicsWorld {
     pub event_handler: (),
 }
 
+impl Default for PhysicsWorld {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PhysicsWorld {
     pub fn new() -> Self {
         let rigid_body_set = RigidBodySet::new();

@@ -74,7 +74,7 @@ pub fn draw_texture_centered_lazy(
 pub fn get_camera_zoom(world: &World) -> Vec2 {
     vec2(
         world.camera.zoom.x,
-        world.camera.zoom.y * -1.0, // flip y axis for macroquad bug
+        -world.camera.zoom.y, // flip y axis for macroquad bug
     )
 }
 
@@ -211,7 +211,7 @@ fn tiled_parallax_x(
     zoom: f32,
     size: f32,
     offset_backwards: f32,
-) -> impl Iterator<Item = f32> + DoubleEndedIterator {
+) -> impl DoubleEndedIterator<Item = f32> {
     let camera_start_x = world.camera.target.x - 1.0 / get_camera_zoom(world).x;
     let camera_end_x = world.camera.target.x + 1.0 / get_camera_zoom(world).x;
     tiled_parallax(zoom, size, offset_backwards, camera_start_x, camera_end_x)
@@ -221,7 +221,7 @@ fn tiled_parallax_y(
     zoom: f32,
     size: f32,
     offset_backwards: f32,
-) -> impl Iterator<Item = f32> + DoubleEndedIterator {
+) -> impl DoubleEndedIterator<Item = f32> {
     let factor = screen_height() / screen_width() * 2.0;
     let camera_start_y = world.camera.target.y - factor / get_camera_zoom(world).y;
     let camera_end_y = world.camera.target.y + factor / get_camera_zoom(world).y;
@@ -235,7 +235,7 @@ fn tiled_parallax(
     offset_backwards: f32,
     camera_start: f32,
     camera_end: f32,
-) -> impl Iterator<Item = f32> + DoubleEndedIterator {
+) -> impl DoubleEndedIterator<Item = f32> {
     let camera_target = (camera_start + camera_end) / 2.0;
     let start = (((camera_start - (camera_end - camera_start) * (1.0 - zoom) / zoom * 0.5) / size
         * zoom)

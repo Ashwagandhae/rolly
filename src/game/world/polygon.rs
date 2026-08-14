@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use itertools::Itertools;
 use macroquad::prelude::*;
@@ -39,11 +39,11 @@ pub fn trimesh_from_polygon(vertices: &[Vec2]) -> Vec<[u32; 3]> {
         .map(|(i, v)| ((*v).into(), i as u32))
         .collect();
     let map = |v: Vec2| -> u32 { vertices_index_map[&v.into()] };
-    let indices = triangles
+    
+    triangles
         .into_iter()
         .map(|[v1, v2, v3]| [map(v1), map(v2), map(v3)])
-        .collect::<Vec<_>>();
-    indices
+        .collect::<Vec<_>>()
 }
 
 // only include outer edge triangles
@@ -58,14 +58,15 @@ fn trimesh_indices_from_polygon_minimal(vertices: &[Vec2]) -> Vec<[u32; 3]> {
     let index_distance = |i: u32, j: u32| -> u32 {
         // get circular distance between two indices
         let len = vertices.len() as u32;
-        let distance = (i as i32 - j as i32).abs() as u32;
+        let distance = (i as i32 - j as i32).unsigned_abs();
         if distance > len / 2 {
             len - distance
         } else {
             distance
         }
     };
-    let indices = triangles
+    
+    triangles
         .into_iter()
         .filter_map(|[v1, v2, v3]| {
             let ret = [map(v1), map(v2), map(v3)];
@@ -78,8 +79,7 @@ fn trimesh_indices_from_polygon_minimal(vertices: &[Vec2]) -> Vec<[u32; 3]> {
                 None
             }
         })
-        .collect::<Vec<_>>();
-    indices
+        .collect::<Vec<_>>()
 }
 
 /// When wanting to draw a rect aligned with and inside the edges of a polygon, they can intersect.
@@ -102,7 +102,6 @@ pub fn triangulate_polygon(vertices: &[Vec2]) -> Vec<[Vec2; 3]> {
 }
 
 use earcutr::earcut;
-use poly2tri_rs::{Point, SweeperBuilder};
 pub fn triangulate_polygon_over_4(vertices: &[Vec2]) -> Vec<[Vec2; 3]> {
     // let sweeper = SweeperBuilder::new(
     //     vertices
@@ -125,8 +124,7 @@ pub fn triangulate_polygon_over_4(vertices: &[Vec2]) -> Vec<[Vec2; 3]> {
     //     .collect::<Vec<_>>()
     let vertices = vertices
         .iter()
-        .map(|v| [v.x, v.y])
-        .flatten()
+        .flat_map(|v| [v.x, v.y])
         .collect::<Vec<_>>();
     let triangles = earcut(&vertices, &[], 2).unwrap();
     triangles

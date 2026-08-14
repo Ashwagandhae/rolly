@@ -39,7 +39,7 @@ pub struct World {
 }
 
 impl World {
-    pub fn new(settings: &Settings, assets: &mut Assets, config: &GameConfig) -> Self {
+    pub fn new(_settings: &Settings, assets: &mut Assets, config: &GameConfig) -> Self {
         println!("Loading world...");
         let mut physics_world = PhysicsWorld::new();
         let camera = Camera2D {

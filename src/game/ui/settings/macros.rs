@@ -24,14 +24,14 @@ macro_rules! make_settings_struct {
                 }
 
             }
-            pub fn iter(&self) -> impl Iterator<Item=SettingKind> {
+            pub fn iter(&self) -> impl Iterator<Item=SettingKind<'_>> {
                 vec![
                     $(
                         SettingKind::$ty(&self.$var),
                     )*
                 ].into_iter()
             }
-            pub fn iter_mut(&mut self) -> impl Iterator<Item=SettingKindMut> {
+            pub fn iter_mut(&mut self) -> impl Iterator<Item=SettingKindMut<'_>> {
                 vec![
                     $(
                         SettingKindMut::$ty(&mut self.$var),

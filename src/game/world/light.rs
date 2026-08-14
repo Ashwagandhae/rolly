@@ -110,7 +110,7 @@ pub fn shape_to_light(shape: &SvgShape) -> Light {
         SvgShape::Circle(circle) => {
             // we don't care about the rotation of the circle
             Light {
-                pos: circle.pos.into(),
+                pos: circle.pos,
                 radius: circle.r,
             }
         }
@@ -120,7 +120,7 @@ pub fn shape_to_light(shape: &SvgShape) -> Light {
 
 pub fn load_light(assets: &Assets, light: &str, init_state: LightState) -> LightGroup {
     let svg = &assets.lights[light];
-    let (size, items) = read_svg(&svg);
+    let (size, items) = read_svg(svg);
     let lights = items
         .into_iter()
         .map(|item| shape_to_light(&item.shape))

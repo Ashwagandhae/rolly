@@ -24,7 +24,7 @@ pub fn shape_to_collider(shape: &SvgShape) -> (Isometry2<f32>, SharedShape) {
         }
         SvgShape::Path(path) => {
             let vertices = &path.vertices;
-            let indices = trimesh_from_polygon(&vertices);
+            let indices = trimesh_from_polygon(vertices);
             let vertices = vertices.iter().map(|&v| v.into()).collect::<Vec<_>>();
             (Vec2::ZERO.into(), SharedShape::trimesh(vertices, indices))
         }
@@ -33,12 +33,11 @@ pub fn shape_to_collider(shape: &SvgShape) -> (Isometry2<f32>, SharedShape) {
 
 pub fn load_collider(assets: &Assets, collider: &str) -> Option<(Rect, ColliderBuilder)> {
     let svg = &assets.colliders.get(collider)?;
-    let (size, items) = read_svg(&svg);
+    let (size, items) = read_svg(svg);
     let translate = -size / 2.0;
     let shapes = items
         .into_iter()
         .map(|item| shape_to_collider(&item.shape))
-        .map(|(pos, shape)| (pos.into(), shape))
         .collect::<Vec<_>>();
     let builder = ColliderBuilder::compound(shapes).translation(translate.into());
     let rect = Rect::new(-size.x / 2.0, -size.y / 2.0, size.x, size.y);

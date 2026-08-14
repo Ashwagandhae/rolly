@@ -33,13 +33,15 @@ pub struct Flytrap {
     pub touching_player: bool,
     pub teeth_x: f32,
     pub teeth_speed: f32,
+    pub flipped: bool,
 }
 impl Flytrap {
-    fn new() -> Self {
+    fn new(flipped: bool) -> Self {
         Flytrap {
             touching_player: false,
             teeth_x: 0.0,
             teeth_speed: 0.1,
+            flipped,
         }
     }
 }
@@ -147,7 +149,8 @@ pub fn thing_info_to_entity(
                 rotation,
             }),
         ],
-        0x964952 => vec![t(world, "flytrap", Material::Fern).add(Flytrap::new())],
+        0x964952 => vec![t(world, "flytrap", Material::Fern).add(Flytrap::new(false))],
+        0xB87C83 => vec![t(world, "flytrap-flipped", Material::Fern).add(Flytrap::new(true))],
         0x1C7D46 => create_bamboo(assets, world, pos, rotation, shape_size.height()),
         _ => return None,
     })
@@ -190,7 +193,7 @@ fn create_bamboo_segment(
         })
         .add(Material::Grass);
 
-    let (_, collider) = collider::load_collider(&assets, "bamboo").unwrap();
+    let (_, collider) = collider::load_collider(assets, "bamboo").unwrap();
 
     let collider = environment_collider(collider, false);
 
@@ -258,7 +261,7 @@ fn respawn_thing(
     let starts_active = world.player.all_respawns().contains(&(level_id, thing_id));
     let light = load_light(
         assets,
-        &texture,
+        texture,
         if starts_active {
             LightState::Ripple(RippleState { strength: 1.0 })
         } else {
@@ -363,6 +366,12 @@ impl std::default::Default for BasicThingParams {
 }
 
 pub struct EntityBuilder(HecsEntityBuilder);
+impl Default for EntityBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EntityBuilder {
     pub fn new() -> Self {
         Self(HecsEntityBuilder::new())
@@ -401,7 +410,7 @@ fn basic_thing(
         .add(material);
 
     let collider = match ex.collider {
-        ColliderRepr::DefaultFile => collider::load_collider(assets, &texture),
+        ColliderRepr::DefaultFile => collider::load_collider(assets, texture),
         ColliderRepr::File(collider_file) => collider::load_collider(assets, &collider_file),
         ColliderRepr::Raw(rect, builder) => Some((rect, builder)),
         ColliderRepr::None => None,
@@ -411,6 +420,7 @@ fn basic_thing(
         let collider = environment_collider(collider, !material.rigid());
 
         if ex.lazy {
+            let rect = Rect::new(pos.x - rect.w / 2.0, pos.y - rect.h / 2.0, rect.w, rect.h);
             builder = builder.add(LazyCollider {
                 rect,
                 builder: collider,

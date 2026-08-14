@@ -1,14 +1,13 @@
 use std::f32::consts::PI;
-use std::ops::Deref;
 
-use super::draw::{get_camera_rect, pixel_to_meter};
+use super::draw::pixel_to_meter;
 use super::floor::{LazyCollider, Material};
 use super::frame::Transition;
 use super::level::{
     LevelId, load_level, unload_level, update_loaded_levels, update_loaded_levels_alive,
 };
 use super::life_state::LifeState;
-use super::light::{Light, LightGroup};
+use super::light::LightGroup;
 use super::physics_world::PhysicsWorld;
 use super::player::{Body, Polly, Rolly};
 
@@ -22,7 +21,7 @@ use crate::game::world::level::load_level_at_pos;
 use crate::game::world::light::{LightState, Ripple, RippleSource, RippleState};
 use crate::game::world::thing::{Flytrap, Mushroom, RespawnActive, ThingDraw};
 use macroquad::prelude::*;
-use nalgebra::{Point2, UnitComplex};
+use nalgebra::UnitComplex;
 use ordered_float::OrderedFloat;
 use rapier2d::prelude::*;
 
@@ -83,12 +82,9 @@ fn update_ripple_source(world: &mut World) {
                     .narrow_phase
                     .contact_pairs_with(*collider)
             })
-            .filter(|pair| pair.has_any_active_contact)
-            .next();
-        if !source.just_contacted {
-            if contact.is_some() {
-                ripples.push(Ripple::new(player_pos));
-            }
+            .find(|pair| pair.has_any_active_contact);
+        if !source.just_contacted && contact.is_some() {
+            ripples.push(Ripple::new(player_pos));
         }
         source.just_contacted = contact.is_some();
     }
@@ -218,23 +214,20 @@ fn respawn_transition(world: &mut World) {
             .entities
             .query_mut::<(&mut Respawn, &mut ThingDraw, &mut LightGroup)>()
     {
-        match &mut respawn.active {
-            RespawnActive::Active(transition) => {
-                if transition.get() <= 0.0 {
-                    continue;
-                }
-                transition.tick(get_frame_time());
-                let new_offset = respawn.offset * simple_easing::quart_in(transition.get());
-                draw.offset = new_offset;
-                if transition.get() <= 0.0 {
-                    for (_, state) in light_group.lights.iter_mut() {
-                        *state = LightState::Ripple(RippleState {
-                            strength: state.strength(),
-                        });
-                    }
+        if let RespawnActive::Active(transition) = &mut respawn.active {
+            if transition.get() <= 0.0 {
+                continue;
+            }
+            transition.tick(get_frame_time());
+            let new_offset = respawn.offset * simple_easing::quart_in(transition.get());
+            draw.offset = new_offset;
+            if transition.get() <= 0.0 {
+                for (_, state) in light_group.lights.iter_mut() {
+                    *state = LightState::Ripple(RippleState {
+                        strength: state.strength(),
+                    });
                 }
             }
-            _ => {}
         }
     }
 }
@@ -249,7 +242,7 @@ const CHEAT_MOVE_SPEED: f32 = 0.1;
 fn player_cheat_movement(world: &mut World) {
     let handle = world.player.body.any_body_handle();
     let rigid_body = world.physics_world.get_body_mut(handle).unwrap();
-    let mut pos = rigid_body.position().clone();
+    let mut pos = *rigid_body.position();
     let mut used = false;
     if is_key_down(KeyCode::S) {
         pos.translation.y += CHEAT_MOVE_SPEED;
@@ -268,25 +261,23 @@ fn player_cheat_movement(world: &mut World) {
         used = true;
     }
 
-    if is_key_pressed(KeyCode::RightBracket) {
-        if let Some(respawn_pos) =
+    if is_key_pressed(KeyCode::RightBracket)
+        && let Some(respawn_pos) =
             find_closest_respawn(world, pos.translation.into(), |respawn_pos| {
                 respawn_pos.x > pos.translation.x + pixel_to_meter(50.0)
             })
-        {
-            pos.translation = respawn_pos.into();
-            used = true;
-        }
+    {
+        pos.translation = respawn_pos.into();
+        used = true;
     }
-    if is_key_pressed(KeyCode::LeftBracket) {
-        if let Some(respawn_pos) =
+    if is_key_pressed(KeyCode::LeftBracket)
+        && let Some(respawn_pos) =
             find_closest_respawn(world, pos.translation.into(), |respawn_pos| {
                 respawn_pos.x < pos.translation.x - pixel_to_meter(50.0)
             })
-        {
-            pos.translation = respawn_pos.into();
-            used = true;
-        }
+    {
+        pos.translation = respawn_pos.into();
+        used = true;
     }
     let rigid_body = world.physics_world.get_body_mut(handle).unwrap();
     if used {
@@ -454,10 +445,10 @@ fn player_water(world: &mut World) {
         linvel.x -= linvel.x * (0.5 * get_frame_time()).clamp(0.0, 1.0);
         linvel.y -= linvel.y * (0.5 * get_frame_time()).clamp(0.0, 1.0);
         linvel.y -= 8.0 * get_frame_time();
-        if let LifeState::Alive(Transition::End) = world.player.life_state {
-            if let Body::Polly(_) = world.player.body {
-                world.player.life_state = LifeState::Dead(Transition::Start);
-            }
+        if let LifeState::Alive(Transition::End) = world.player.life_state
+            && let Body::Polly(_) = world.player.body
+        {
+            world.player.life_state = LifeState::Dead(Transition::Start);
         }
     }
     player_body.set_linvel(linvel, true);
@@ -541,7 +532,7 @@ fn player_respawn(world: &mut World) {
     }
     let body = get_player_body(world);
     let player_pos: Vec2 = (*body.translation()).into();
-    for (_, (respawn, _, _, level_id, thing_id, light_group)) in world
+    for (_, (respawn, _, _, level_id, thing_id, _light_group)) in world
         .entities
         .query_mut::<(
             &mut Respawn,
@@ -575,7 +566,7 @@ fn player_mushroom(world: &mut World) {
         return;
     }
     let body = get_player_body(world);
-    let mut linvel: Vec2 = body.linvel().clone().into();
+    let mut linvel: Vec2 = (*body.linvel()).into();
     let player_pos: Vec2 = (*body.translation()).into();
     for (_, (mushroom, mushroom_handle)) in world
         .entities
@@ -594,7 +585,7 @@ fn player_mushroom(world: &mut World) {
 
             let velocity_delta = PLAYER_VEL_MUSHROOM - current_speed_in_dir;
 
-            linvel = linvel + (dir * velocity_delta);
+            linvel += dir * velocity_delta;
         } else {
             mushroom.touching_player = false;
         }
@@ -607,7 +598,7 @@ fn player_flytrap(world: &mut World) {
         return;
     }
     let body = get_player_body(world);
-    let mut angvel: f32 = body.angvel().clone().into();
+    let mut angvel: f32 = body.angvel();
     let player_pos: Vec2 = (*body.translation()).into();
     let player_is_rolly = world.player.body.is_rolly();
     for (_, (flytrap, flytrap_handle)) in world
@@ -622,7 +613,11 @@ fn player_flytrap(world: &mut World) {
             }
             flytrap.touching_player = true;
             if player_is_rolly {
-                angvel = PLAYER_VEL_FLYTRAP;
+                angvel = if flytrap.flipped {
+                    -PLAYER_VEL_FLYTRAP
+                } else {
+                    PLAYER_VEL_FLYTRAP
+                };
                 flytrap.teeth_speed = 2.0;
             } else {
                 flytrap.teeth_speed = 1.0;
@@ -632,7 +627,7 @@ fn player_flytrap(world: &mut World) {
         }
     }
     let body = get_player_body_mut(world);
-    body.set_angvel(angvel.into(), true);
+    body.set_angvel(angvel, true);
 }
 fn player_fall(world: &mut World) {
     if !world.player.alive() {
@@ -648,9 +643,13 @@ fn player_fall(world: &mut World) {
 fn update_lazy_collider(world: &mut World) {
     let mut entities_remove_collider = Vec::new();
     let mut entities_add_collider = Vec::new();
-    for (entity, (lazy_collider, handle)) in world
+    for (entity, (lazy_collider, handle, thing_draw)) in world
         .entities
-        .query::<(&mut LazyCollider, Option<&ColliderHandle>)>()
+        .query::<(
+            &mut LazyCollider,
+            Option<&ColliderHandle>,
+            Option<&ThingDraw>,
+        )>()
         .iter()
     {
         let player_pos = get_player_body(world).position();
@@ -660,25 +659,21 @@ fn update_lazy_collider(world: &mut World) {
             w: LAZY_PLAYER_RECT,
             h: LAZY_PLAYER_RECT,
         };
-        let collider_body_pos = world
-            .physics_world
-            .get_body(lazy_collider.body_handle)
-            .unwrap()
-            .translation();
-        let collider_rect = Rect {
-            x: collider_body_pos.x + lazy_collider.rect.x,
-            y: collider_body_pos.y + lazy_collider.rect.y,
-            w: lazy_collider.rect.w,
-            h: lazy_collider.rect.h,
-        };
-        let overlaps = player_rect.overlaps(&collider_rect);
+        let overlaps = player_rect.overlaps(&lazy_collider.rect);
+        let texture = thing_draw.map(|x| x.texture.as_str()).unwrap_or("none");
         if let Some(handle) = handle {
             if !overlaps {
+                if texture.contains("bamboo") {
+                    println!("unloading, {:?}", texture);
+                }
                 world.physics_world.remove_collider(*handle);
                 entities_remove_collider.push(entity);
             }
         } else {
             if overlaps {
+                if texture.contains("bamboo") {
+                    println!("loading, {:?}", texture);
+                }
                 let handle = world.physics_world.add_collider(
                     lazy_collider.builder.clone().build(),
                     lazy_collider.body_handle,

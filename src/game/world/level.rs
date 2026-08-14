@@ -64,19 +64,16 @@ impl LevelInfo {
         let mut markers = Markers::default();
         let (size, items) = read_svg(svg);
         for item in items {
-            match item.shape {
-                SvgShape::Circle(circle) => {
-                    let radius: usize = meter_to_pixel(circle.r).round() as usize;
-                    if radius != 50 {
-                        continue;
-                    }
-                    match item.color {
-                        0x00FF00 => markers.start = circle.pos,
-                        0xFF0000 => markers.end = circle.pos,
-                        _ => {}
-                    }
+            if let SvgShape::Circle(circle) = item.shape {
+                let radius: usize = meter_to_pixel(circle.r).round() as usize;
+                if radius != 50 {
+                    continue;
                 }
-                _ => {}
+                match item.color {
+                    0x00FF00 => markers.start = circle.pos,
+                    0xFF0000 => markers.end = circle.pos,
+                    _ => {}
+                }
             }
         }
         Self {
@@ -157,7 +154,7 @@ pub fn update_loaded_levels(assets: &Assets, world: &mut World) {
         .levels
         .iter()
         .flat_map(|(level, pos)| find_adjacent_levels_to_load(assets, world, *level, *pos))
-        .filter_map(|x| x)
+        .flatten()
         .collect::<Vec<_>>();
     let levels_to_unload = find_levels_to_unload(assets, world);
     for &(level, pos) in levels_to_load.iter() {

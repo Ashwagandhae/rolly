@@ -39,10 +39,8 @@ pub fn draw(assets: &Assets, world: &World) {
         }
         if let Or::Right((thing_draw, flytrap)) | Or::Both(_, (thing_draw, flytrap)) = draw {
             let drew = draw_thing(assets, world, thing_draw, body);
-            if drew {
-                if let Some(flytrap) = flytrap {
-                    draw_flytrap(assets, world, thing_draw, body, flytrap);
-                }
+            if drew && let Some(flytrap) = flytrap {
+                draw_flytrap(assets, world, thing_draw, body, flytrap);
             }
         }
     }
@@ -105,7 +103,7 @@ pub struct TiledDraw {
 
 impl TiledDraw {
     pub fn new(assets: &Assets, tile: &'static str, colors: [Color; 3], vertices: &[Vec2]) -> Self {
-        let shrink_1 = shrink_polygon(&vertices, pixel_to_meter(40.0));
+        let shrink_1 = shrink_polygon(vertices, pixel_to_meter(40.0));
         let shrink_2 = shrink_polygon(&shrink_1, pixel_to_meter(40.0));
         let map = |vertices: Vec<Vec2>| {
             let indices = trimesh_from_polygon(&vertices);
@@ -238,7 +236,8 @@ fn draw_flytrap(
     let dir_x = vec2(1.0, 0.0).rotate(Vec2::from_angle(angle));
     let dir_y = vec2(0.0, 1.0).rotate(Vec2::from_angle(angle));
 
-    let first_tooth_pos = pos - pixel_to_meter(65.0) * dir_x - pixel_to_meter(25.0) * dir_y;
+    let x_mul = if flytrap.flipped { -1.0 } else { 1.0 };
+    let first_tooth_pos = pos - pixel_to_meter(65.0) * x_mul * dir_x - pixel_to_meter(25.0) * dir_y;
 
     let progress = 1.0 - flytrap.teeth_x % 1.0;
     for i in 0..NUM_TEETH {
@@ -251,7 +250,7 @@ fn draw_flytrap(
             1.0
         };
         let tooth_pos = first_tooth_pos
-            + pixel_to_meter(tooth_x_pos) * dir_x
+            + pixel_to_meter(tooth_x_pos) * dir_x * x_mul
             + pixel_to_meter(30.0) * dir_y * (1.0 - y_progress);
         let texture = format!("flytrap-tooth{}", i);
         draw_texture_centered_lazy(world, assets, &texture, tooth_pos, angle, None);
@@ -261,7 +260,12 @@ fn draw_flytrap(
         assets,
         world,
         &ThingDraw {
-            texture: "flytrap-front".to_owned(),
+            texture: if flytrap.flipped {
+                "flytrap-flipped-front"
+            } else {
+                "flytrap-front"
+            }
+            .to_owned(),
             ..thing_draw.clone()
         },
         body,

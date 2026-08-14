@@ -152,13 +152,14 @@ impl std::ops::IndexMut<&str> for Assets {
 pub fn extract_tiles(
     name_and_args: &Vec<(&str, (usize, usize), Option<&str>)>,
 ) -> HashMap<String, Tile> {
-    let tiles = name_and_args
+    
+    name_and_args
         .iter()
         .filter_map(|(full_name, _, args)| {
             full_name.strip_prefix("tile_").map(|name| {
                 let tile_name = name.split_once('_').map(|(name, _)| name).unwrap_or(name);
                 let constraints = args
-                    .map(|args| TileConstraints::parse(args))
+                    .map(TileConstraints::parse)
                     .unwrap_or_default();
                 (tile_name, (full_name, constraints))
             })
@@ -173,8 +174,7 @@ pub fn extract_tiles(
                     .push((name.to_string(), constraints));
                 tiles
             },
-        );
-    tiles
+        )
 }
 
 pub fn split_name_args(name: &str) -> (&str, Option<&str>) {
@@ -240,7 +240,7 @@ impl TileConstraints {
             }
         }
         let constraint_items: Vec<&str> = constraints.split('_').collect();
-        let left_height = constraint_items.get(0).map(|&s| parse_range(s));
+        let left_height = constraint_items.first().map(|&s| parse_range(s));
         let height = constraint_items.get(1).map(|&s| s.parse().unwrap());
         let right_height = constraint_items.get(2).map(|&s| parse_range(s));
         let weight = constraint_items.get(3).map(|&s| s.parse().unwrap());

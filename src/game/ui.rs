@@ -85,11 +85,11 @@ pub fn init(settings: &Settings) {
     egui_macroquad::draw();
 }
 
-fn draw_buttons(mut game: &mut Game, ui: &mut Ui, buttons: &[(&str, fn(&mut Game))]) {
+fn draw_buttons(game: &mut Game, ui: &mut Ui, buttons: &[(&str, fn(&mut Game))]) {
     for (text, action) in buttons {
         let button = egui::Button::new(*text).min_size(egui::Vec2::new(ITEM_WIDTH, ITEM_HEIGHT));
         if ui.add(button).clicked() {
-            action(&mut game);
+            action(game);
         }
     }
 }
@@ -149,11 +149,10 @@ fn draw_label(ui: &mut Ui, setting: &Setting<impl SettingInfo>) {
         .show(ui, |ui| ui.add(egui::Label::new(setting.name)));
 }
 fn draw_reset_button(ui: &mut Ui, setting: &mut Setting<impl SettingInfo>) {
-    if setting.value != setting.info.default_value() {
-        if ui.add(egui::Button::new("reset")).clicked() {
+    if setting.value != setting.info.default_value()
+        && ui.add(egui::Button::new("reset")).clicked() {
             setting.value = setting.info.default_value();
         }
-    }
 }
 
 fn draw_slider(ui: &mut Ui, setting: &mut Setting<Slider>) {
@@ -286,12 +285,9 @@ fn paused(game: &mut Game) {
 }
 
 fn change_screen(game: &mut Game, screen: Screen) {
-    match (game.screen, screen) {
-        (Screen::Running | Screen::Paused, Screen::Home | Screen::Quit) => {
-            save_world(game);
-            game.world = None;
-        }
-        _ => {}
+    if let (Screen::Running | Screen::Paused, Screen::Home | Screen::Quit) = (game.screen, screen) {
+        save_world(game);
+        game.world = None;
     }
     game.screen = screen;
 }
